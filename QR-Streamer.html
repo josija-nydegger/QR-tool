@@ -2,8 +2,8 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - ULTRA STABIL)</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <title>QR-Code Datenüberträger (Sender - Pre-Rendered)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -32,30 +32,31 @@
         .btn-start { background-color: #0071e3; color: white; }
         .btn-stop { background-color: #ff3b30; color: white; display: none; }
         #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; }
-        #qrcode { padding: 20px; background: white; border: 1px solid #d2d2d7; border-radius: 8px; min-height: 256px; min-width: 256px; }
+        /* Wir nutzen jetzt ein echtes Bild-Element (img) statt eines leeren Divs */
+        #qr-image { padding: 20px; background: white; border: 1px solid #d2d2d7; border-radius: 8px; width: 256px; height: 256px; object-fit: contain; }
         #status { margin-top: 10px; font-weight: 600; font-size: 14px; color: #86868b; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Daten-Sender)</h1>
+    <h1>QR-Streamer (Pre-Rendered)</h1>
     
     <label for="textInput">Zu übertragender Text:</label>
     <textarea id="textInput" placeholder="Kopiere hier deinen Text hinein..."></textarea>
     
     <div class="controls">
         <div>
-            <label for="chunkSize">Sicherheits-Modus:</label>
+            <label for="chunkSize">Paketgrösse:</label>
             <select id="chunkSize">
-                <option value="60" selected>Sehr sicher (Kleine Häppchen)</option>
-                <option value="150">Normal (Mittlere Häppchen)</option>
-                <option value="400">Schnell (Grosse Häppchen)</option>
+                <option value="60">Sehr sicher (60 Zeichen)</option>
+                <option value="150" selected>Normal (150 Zeichen)</option>
+                <option value="300">Gross (300 Zeichen)</option>
             </select>
         </div>
         <div>
             <label for="fps">Geschwindigkeit (FPS):</label>
-            <input type="number" id="fps" value="3" min="1" max="15">
+            <input type="number" id="fps" value="5" min="1" max="30">
         </div>
     </div>
     
@@ -64,15 +65,15 @@
 </div>
 
 <div id="visualizer">
-    <div id="qrcode"></div>
+    <img id="qr-image" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Warte auf Start..." />
     <div id="status">Bereit zum Senden</div>
 </div>
 
 <script>
     let animationInterval = null;
-    const qrContainer = document.getElementById("qrcode");
+    let frames = []; // Unser Filmstreifen
+    let currentIndex = 0;
 
-    // Bereinigt den Text radikal
     function sanitizeText(rawText) {
         return rawText
             .replace(/\r\n/g, "\n")      
@@ -98,47 +99,48 @@
         let rawText = document.getElementById("textInput").value;
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
-        const cleanedText = sanitizeText(rawText);
-        const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
-        const fps = parseInt(document.getElementById("fps").value);
-        const intervalMs = 1000 / fps;
-
-        const textChunks = chunkText(cleanedText, maxChunkSize);
-        const totalChunks = textChunks.length;
-        let currentIndex = 0;
-
+        document.getElementById("status").innerText = "Berechne Frames... Bitte warten.";
         document.getElementById("startBtn").style.display = "none";
         document.getElementById("stopBtn").style.display = "block";
 
-        if (animationInterval) clearInterval(animationInterval);
+        const cleanedText = sanitizeText(rawText);
+        const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
+        const fps = parseInt(document.getElementById("fps").value);
 
-        // Wir erstellen ein einziges QR-Objekt mit fester Version (15) vorab
-        qrContainer.innerHTML = "";
-        let qrInstanz = new QRCode(qrContainer, {
-            width: 256,
-            height: 256,
-            correctLevel: QRCode.CorrectLevel.L
+        const textChunks = chunkText(cleanedText, maxChunkSize);
+        const totalChunks = textChunks.length;
+
+        // 1. PRE-RENDERING: Wir berechnen die ganze Sequenz im Voraus
+        frames = []; // Alte Frames löschen
+        const qr = new QRious({
+            size: 400, // Hohe Auflösung für die Generierung
+            level: 'L' // Low Fehlerkorrektur = mehr Platz
         });
 
-        animationInterval = setInterval(() => {
-            const currentChunk = textChunks[currentIndex];
-            const frameNumber = currentIndex + 1;
-            
+        for (let i = 0; i < totalChunks; i++) {
+            const frameNumber = i + 1;
             const paddedCurrent = String(frameNumber).padStart(3, '0');
             const paddedTotal = String(totalChunks).padStart(3, '0');
-            const payload = `${paddedCurrent}/${paddedTotal}|${currentChunk}`;
+            const payload = `${paddedCurrent}/${paddedTotal}|${textChunks[i]}`;
             
-            try {
-                // Nutzt die eingebaute .makeCode() Funktion, die extrem stabil läuft
-                qrInstanz.makeCode(payload);
-                document.getElementById("status").innerText = `Sende Frame ${frameNumber} von ${totalChunks} (${fps} Hz)`;
-                currentIndex = (currentIndex + 1) % totalChunks;
-            } catch (e) {
-                console.error("QR-Fehler bei Frame:", frameNumber, e);
-                document.getElementById("status").innerText = `Fehler in Frame ${frameNumber}. Überspringe...`;
-                currentIndex = (currentIndex + 1) % totalChunks;
-            }
-        }, intervalMs);
+            // Setzt den Wert im QR-Generator
+            qr.value = payload;
+            
+            // Exportiert den generierten Code als fertiges Bild (.toDataURL) in unser Array
+            frames.push(qr.toDataURL());
+        }
+
+        // 2. ABSPIELEN: Der Stream selbst ist jetzt nur noch eine Diashow
+        currentIndex = 0;
+        if (animationInterval) clearInterval(animationInterval);
+
+        animationInterval = setInterval(() => {
+            // Wir tauschen nur noch das fertige Bild aus
+            document.getElementById("qr-image").src = frames[currentIndex];
+            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz)`;
+            
+            currentIndex = (currentIndex + 1) % totalChunks;
+        }, 1000 / fps);
     }
 
     function stopStreaming() {
