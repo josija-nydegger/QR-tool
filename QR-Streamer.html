@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Komplett)</title>
+    <title>QR-Code Datenüberträger (Sender - ULTRA STABIL)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body {
@@ -46,16 +46,16 @@
     
     <div class="controls">
         <div>
-            <label for="chunkSize">Paketgrösse:</label>
+            <label for="chunkSize">Sicherheits-Modus:</label>
             <select id="chunkSize">
-                <option value="100" selected>100 Zeichen (Sehr robust)</option>
-                <option value="300">300 Zeichen (Standard)</option>
-                <option value="800">800 Zeichen (Schnell)</option>
+                <option value="60" selected>Sehr sicher (Kleine Häppchen)</option>
+                <option value="150">Normal (Mittlere Häppchen)</option>
+                <option value="400">Schnell (Grosse Häppchen)</option>
             </select>
         </div>
         <div>
             <label for="fps">Geschwindigkeit (FPS):</label>
-            <input type="number" id="fps" value="4" min="1" max="20">
+            <input type="number" id="fps" value="3" min="1" max="15">
         </div>
     </div>
     
@@ -72,6 +72,7 @@
     let animationInterval = null;
     const qrContainer = document.getElementById("qrcode");
 
+    // Bereinigt den Text radikal
     function sanitizeText(rawText) {
         return rawText
             .replace(/\r\n/g, "\n")      
@@ -101,3 +102,52 @@
         const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
         const fps = parseInt(document.getElementById("fps").value);
         const intervalMs = 1000 / fps;
+
+        const textChunks = chunkText(cleanedText, maxChunkSize);
+        const totalChunks = textChunks.length;
+        let currentIndex = 0;
+
+        document.getElementById("startBtn").style.display = "none";
+        document.getElementById("stopBtn").style.display = "block";
+
+        if (animationInterval) clearInterval(animationInterval);
+
+        // Wir erstellen ein einziges QR-Objekt mit fester Version (15) vorab
+        qrContainer.innerHTML = "";
+        let qrInstanz = new QRCode(qrContainer, {
+            width: 256,
+            height: 256,
+            correctLevel: QRCode.CorrectLevel.L
+        });
+
+        animationInterval = setInterval(() => {
+            const currentChunk = textChunks[currentIndex];
+            const frameNumber = currentIndex + 1;
+            
+            const paddedCurrent = String(frameNumber).padStart(3, '0');
+            const paddedTotal = String(totalChunks).padStart(3, '0');
+            const payload = `${paddedCurrent}/${paddedTotal}|${currentChunk}`;
+            
+            try {
+                // Nutzt die eingebaute .makeCode() Funktion, die extrem stabil läuft
+                qrInstanz.makeCode(payload);
+                document.getElementById("status").innerText = `Sende Frame ${frameNumber} von ${totalChunks} (${fps} Hz)`;
+                currentIndex = (currentIndex + 1) % totalChunks;
+            } catch (e) {
+                console.error("QR-Fehler bei Frame:", frameNumber, e);
+                document.getElementById("status").innerText = `Fehler in Frame ${frameNumber}. Überspringe...`;
+                currentIndex = (currentIndex + 1) % totalChunks;
+            }
+        }, intervalMs);
+    }
+
+    function stopStreaming() {
+        if (animationInterval) clearInterval(animationInterval);
+        document.getElementById("startBtn").style.display = "block";
+        document.getElementById("stopBtn").style.display = "none";
+        document.getElementById("status").innerText = "Stream gestoppt";
+    }
+</script>
+
+</body>
+</html>
