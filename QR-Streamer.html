@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Krypto & Drag+Drop)</title>
+    <title>QR-Code Datenüberträger (Sender - Krypto & Drop)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -16,18 +16,34 @@
         .mode-btn { flex: 1; padding: 10px; background-color: #e5e5ea; border: none; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; }
         .mode-btn.active { background-color: #0071e3; color: white; }
 
-        /* Anpassung für Drag & Drop */
         textarea { width: 100%; height: 140px; box-sizing: border-box; border: 2px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; transition: all 0.2s; }
         textarea:focus { outline: none; border-color: #0071e3; }
         textarea.drag-active { background-color: #eef6fc; border: 2px dashed #0071e3; }
         
+        /* NEU: Flexbox-Container für den Clear-Button und die Statistik */
+        .textarea-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+        .btn-clear { background: none; border: none; color: #ff3b30; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; transition: opacity 0.2s; }
+        .btn-clear:hover { opacity: 0.7; }
+        #textStats { font-size: 13px; color: #86868b; font-weight: 500; }
+
         .pin-container { margin-top: 15px; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; }
         .pin-container label { margin-top: 0; color: #1d1d1f; }
-        input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; margin-bottom: 10px; }
+        
+        /* NEU: Custom Wrapper für das PIN-Feld mit robustem Auge */
+        .pin-input-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
+        .pin-input-wrapper input { width: 100%; box-sizing: border-box; padding: 10px 40px 10px 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; }
+        
+        /* Native Browser-Augen radikal deaktivieren */
+        input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
+        input[type="password"]::-webkit-credentials-auto-fill-button { visibility: hidden; }
+        
+        /* Unser eigenes Auge */
+        .eye-btn { position: absolute; right: 5px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; padding: 8px; }
+        .eye-btn:hover { opacity: 1; }
+
         .remember-pin-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #86868b; cursor: pointer; margin: 0; }
         .remember-pin-label input { width: 16px; height: 16px; cursor: pointer; }
 
-        #textStats { text-align: right; font-size: 13px; color: #86868b; margin-top: 5px; font-weight: 500; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         select, input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
         button.action-btn { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
@@ -50,12 +66,21 @@
         <button id="btnMarkdown" class="mode-btn" onclick="setMode('MD')">Markdown Text</button>
     </div>
     
-    <textarea id="textInput" placeholder="Tippe hier, füge Text ein oder ziehe eine .txt / .md Datei direkt in dieses Feld..." oninput="updateStats()"></textarea>
-    <div id="textStats">0 Wörter, 0 Bytes (Komprimiert: 0 Bytes)</div>
+    <textarea id="textInput" placeholder="Tippe hier, füge Text ein oder ziehe eine Datei direkt in dieses Feld..." oninput="updateStats()"></textarea>
+    
+    <div class="textarea-footer">
+        <button class="btn-clear" onclick="clearText()">Leeren 🗑️</button>
+        <div id="textStats">0 Wörter, 0 Bytes (Komprimiert: 0 Bytes)</div>
+    </div>
     
     <div class="pin-container">
         <label for="pinInput">🔒 Verschlüsselung (Optional):</label>
-        <input type="password" id="pinInput" placeholder="Geheimer PIN (z.B. 1234)">
+        
+        <div class="pin-input-wrapper">
+            <input type="password" id="pinInput" placeholder="Geheimer PIN (z.B. 1234)">
+            <button class="eye-btn" id="eyeToggle" onclick="togglePinVisibility()">👁️</button>
+        </div>
+
         <label class="remember-pin-label">
             <input type="checkbox" id="rememberPin">
             PIN für diese Sitzung merken
@@ -92,36 +117,42 @@
     let currentIndex = 0;
     let currentMode = 'TX';
 
-    // --- NEU: DRAG & DROP LOGIK ---
+    // Textfeld leeren
+    function clearText() {
+        document.getElementById('textInput').value = "";
+        updateStats();
+    }
+
+    // PIN Sichtbarkeit umschalten (Custom Eye Button)
+    function togglePinVisibility() {
+        const pinInput = document.getElementById("pinInput");
+        const eyeBtn = document.getElementById("eyeToggle");
+        
+        if (pinInput.type === "password") {
+            pinInput.type = "text";
+            eyeBtn.innerText = "🙈"; // Ausgeblendetes Auge
+        } else {
+            pinInput.type = "password";
+            eyeBtn.innerText = "👁️"; // Sichtbares Auge
+        }
+    }
+
+    // Drag & Drop Logik
     const dropZone = document.getElementById('textInput');
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault(); // Verhindert, dass der Browser die Datei öffnet
-        dropZone.classList.add('drag-active');
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-active');
-    });
-
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-active'); });
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-active');
-        
         if (e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            
-            // Lese die Datei als Text aus
             const reader = new FileReader();
             reader.onload = (event) => {
-                dropZone.value = event.target.result; // Text ins Feld einfügen
-                updateStats(); // Statistik live aktualisieren
+                dropZone.value = event.target.result;
+                updateStats(); 
             };
-            reader.readAsText(file);
+            reader.readAsText(e.dataTransfer.files[0]);
         }
     });
-    // --- ENDE DRAG & DROP LOGIK ---
 
     function setMode(mode) {
         currentMode = mode;
@@ -158,13 +189,17 @@
 
     function startStreaming() {
         let rawText = document.getElementById("textInput").value;
-        let pin = document.getElementById("pinInput").value;
+        let pinInput = document.getElementById("pinInput");
+        let pin = pinInput.value;
         let shouldRemember = document.getElementById("rememberPin").checked;
         
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
         if (!shouldRemember) {
-            document.getElementById("pinInput").value = "";
+            pinInput.value = "";
+            // Wenn gelöscht wird, auch die Sichtbarkeit aus Sicherheitsgründen zurücksetzen
+            pinInput.type = "password";
+            document.getElementById("eyeToggle").innerText = "👁️";
         }
 
         document.getElementById("status").innerText = "Verarbeite Daten und berechne Frames...";
