@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Grosses Bild)</title>
+    <title>QR-Code Datenüberträger (Sender - Mit Statistik)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body {
@@ -27,7 +27,17 @@
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
         textarea { width: 100%; height: 120px; box-sizing: border-box; border: 1px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        
+        /* Neues Design für die Live-Statistik */
+        #textStats {
+            text-align: right;
+            font-size: 13px;
+            color: #86868b;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
         select, input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
         button { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-start { background-color: #0071e3; color: white; }
@@ -39,13 +49,13 @@
             align-items: center; 
             margin-top: 30px; 
             width: 100%;
-            max-width: 600px; /* Passt sich der Breite des oberen Kastens an */
+            max-width: 600px;
         }
         
         #qr-image { 
-            width: 100%; /* Füllt die verfügbare Breite komplett aus */
+            width: 100%; 
             height: auto;
-            aspect-ratio: 1 / 1; /* Hält das Bild immer quadratisch */
+            aspect-ratio: 1 / 1; 
             padding: 20px; 
             box-sizing: border-box;
             background: white; 
@@ -64,7 +74,9 @@
     <h1>QR-Streamer (Pre-Rendered)</h1>
     
     <label for="textInput">Zu übertragender Text:</label>
-    <textarea id="textInput" placeholder="Kopiere hier deinen Text hinein..."></textarea>
+    <textarea id="textInput" placeholder="Kopiere hier deinen Text hinein..." oninput="updateStats()"></textarea>
+    
+    <div id="textStats">0 Wörter, 0 Bytes</div>
     
     <div class="controls">
         <div>
@@ -95,6 +107,25 @@
     let frames = []; 
     let currentIndex = 0;
 
+    // Neue Funktion zur Berechnung der Statistik
+    function updateStats() {
+        const text = document.getElementById("textInput").value;
+        
+        // Wörter zählen (Trennt an Leerzeichen und Zeilenumbrüchen)
+        const words = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+        
+        // Reale Dateigrösse in Bytes berechnen (unterstützt auch Emojis und UTF-8 Sonderzeichen exakt)
+        const bytes = new Blob([text]).size;
+        
+        // Formatierung in Bytes oder Kilobytes
+        let sizeString = bytes + " Bytes";
+        if (bytes >= 1024) {
+            sizeString = (bytes / 1024).toFixed(2) + " KB";
+        }
+        
+        document.getElementById("textStats").innerText = `${words} Wörter, ${sizeString}`;
+    }
+
     function sanitizeText(rawText) {
         return rawText
             .replace(/\r\n/g, "\n")      
@@ -111,60 +142,4 @@
     function chunkText(text, size) {
         const chunks = [];
         for (let i = 0; i < text.length; i += size) {
-            chunks.push(text.slice(i, i + size));
-        }
-        return chunks;
-    }
-
-    function startStreaming() {
-        let rawText = document.getElementById("textInput").value;
-        if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
-
-        document.getElementById("status").innerText = "Berechne Frames... Bitte warten.";
-        document.getElementById("startBtn").style.display = "none";
-        document.getElementById("stopBtn").style.display = "block";
-
-        const cleanedText = sanitizeText(rawText);
-        const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
-        const fps = parseInt(document.getElementById("fps").value);
-
-        const textChunks = chunkText(cleanedText, maxChunkSize);
-        const totalChunks = textChunks.length;
-
-        frames = []; 
-        const qr = new QRious({
-            size: 800, // Deutlich höhere interne Auflösung für das grosse Bild
-            level: 'L' 
-        });
-
-        for (let i = 0; i < totalChunks; i++) {
-            const frameNumber = i + 1;
-            const paddedCurrent = String(frameNumber).padStart(3, '0');
-            const paddedTotal = String(totalChunks).padStart(3, '0');
-            const payload = `${paddedCurrent}/${paddedTotal}|${textChunks[i]}`;
-            
-            qr.value = payload;
-            frames.push(qr.toDataURL());
-        }
-
-        currentIndex = 0;
-        if (animationInterval) clearInterval(animationInterval);
-
-        animationInterval = setInterval(() => {
-            document.getElementById("qr-image").src = frames[currentIndex];
-            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz)`;
-            
-            currentIndex = (currentIndex + 1) % totalChunks;
-        }, 1000 / fps);
-    }
-
-    function stopStreaming() {
-        if (animationInterval) clearInterval(animationInterval);
-        document.getElementById("startBtn").style.display = "block";
-        document.getElementById("stopBtn").style.display = "none";
-        document.getElementById("status").innerText = "Stream gestoppt";
-    }
-</script>
-
-</body>
-</html>
+            chunks.push(text.slice
