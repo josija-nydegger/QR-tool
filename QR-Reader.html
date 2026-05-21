@@ -6,6 +6,7 @@
     <title>QR-Code Datenüberträger (Empfänger)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -32,7 +33,6 @@
         .progress-fill { height: 100%; width: 0%; background-color: #34c759; transition: width 0.2s ease; }
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin-bottom: 15px; }
         
-        /* Optimiertes Textfeld für gerendertes Markdown-Design */
         #result {
             width: 100%;
             height: 200px;
@@ -62,7 +62,7 @@
 <body>
 
 <div class="container">
-    <h1>QR-Receiver (Markdown-Ready)</h1>
+    <h1>QR-Receiver (Turbo-Decompress)</h1>
     
     <div id="reader"></div>
     
@@ -85,8 +85,8 @@
     let receivedChunks = {};
     let totalChunksCount = 0;
     let html5QrcodeScanner = null;
-    let streamMode = 'TX'; // Erkennt automatisch TX oder MD
-    let rawAssembledText = ""; // Speichert den rohen Markdown-Code zum Kopieren
+    let streamMode = 'TX'; 
+    let rawAssembledText = ""; // Speichert den entpackten Klartext für die Zwischenablage
 
     function startScanner() {
         html5QrcodeScanner = new Html5Qrcode("reader");
@@ -106,7 +106,6 @@
     }
 
     function onScanSuccess(decodedText) {
-        // Neues Regex-Muster fängt den Modus ab: "001/010|MD|Inhalt"
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
         
         if (!protocolMatch) return; 
@@ -119,7 +118,7 @@
         if (totalChunksCount !== totalFrames) {
             totalChunksCount = totalFrames;
             receivedChunks = {};
-            streamMode = frameMode; // Setzt den globalen Modus für diesen Stream
+            streamMode = frameMode; 
         }
 
         if (!receivedChunks[currentFrame]) {
@@ -138,25 +137,38 @@
     }
 
     function assembleText() {
-        let fullText = "";
+        let fullAssembledString = "";
         for (let i = 1; i <= totalChunksCount; i++) {
-            fullText += receivedChunks[i];
+            fullAssembledString += receivedChunks[i];
         }
         
-        rawAssembledText = fullText; // Rohen Text im Speicher sichern
+        let finalDecodedText = fullAssembledString;
+
+        // 2. ABSCHLIESSENDE DEKOMPRESSION, falls die Flags CX oder CM gesetzt sind
+        if (streamMode === 'CX' || streamMode === 'CM') {
+            try {
+                document.getElementById("status").innerText = "Entpacke Daten...";
+                finalDecodedText = LZString.decompressFromEncodedURIComponent(fullAssembledString);
+            } catch (e) {
+                console.error("Dekompressionsfehler:", e);
+                document.getElementById("status").innerText = "❌ Fehler beim Entpacken der Daten!";
+                return;
+            }
+        }
+        
+        rawAssembledText = finalDecodedText; // Speicher den echten Text zum Kopieren
         const resultContainer = document.getElementById("result");
         
-        if (streamMode === 'MD') {
-            // Rendert Markdown zu echtem, formatiertem HTML
-            resultContainer.innerHTML = marked.parse(fullText);
+        // Prüfen, ob der Stream urspünglich ein Markdown-Stream (MD oder CM) war
+        if (streamMode === 'MD' || streamMode === 'CM') {
+            resultContainer.innerHTML = marked.parse(finalDecodedText);
             document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Markdown gerendert):";
         } else {
-            // Klassischer Reintext-Modus
-            resultContainer.innerText = fullText;
+            resultContainer.innerText = finalDecodedText;
             document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Reintext):";
         }
         
-        document.getElementById("status").innerText = "🎉 Übertragung vollständig!";
+        document.getElementById("status").innerText = "🎉 Übertragung vollständig & entpackt!";
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     }
 
@@ -180,7 +192,7 @@
             return;
         }
 
-        // Kopiert immer den ROHEI Text (inkl. Markdown-Tags), perfekt für Editoren!
+        // Kopiert den sauberen, entpackten Text (inkl. rohen Markdown-Formatierungen)
         navigator.clipboard.writeText(rawAssembledText).then(() => {
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopiert! ✓";
