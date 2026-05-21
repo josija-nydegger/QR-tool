@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Pre-Rendered)</title>
+    <title>QR-Code Datenüberträger (Sender - Grosses Bild)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body {
@@ -21,6 +21,7 @@
             background: white;
             padding: 24px;
             border-radius: 12px;
+            box-sizing: border-box;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
@@ -31,10 +32,30 @@
         button { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-start { background-color: #0071e3; color: white; }
         .btn-stop { background-color: #ff3b30; color: white; display: none; }
-        #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; }
-        /* Wir nutzen jetzt ein echtes Bild-Element (img) statt eines leeren Divs */
-        #qr-image { padding: 20px; background: white; border: 1px solid #d2d2d7; border-radius: 8px; width: 256px; height: 256px; object-fit: contain; }
-        #status { margin-top: 10px; font-weight: 600; font-size: 14px; color: #86868b; }
+        
+        #visualizer { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            margin-top: 30px; 
+            width: 100%;
+            max-width: 600px; /* Passt sich der Breite des oberen Kastens an */
+        }
+        
+        #qr-image { 
+            width: 100%; /* Füllt die verfügbare Breite komplett aus */
+            height: auto;
+            aspect-ratio: 1 / 1; /* Hält das Bild immer quadratisch */
+            padding: 20px; 
+            box-sizing: border-box;
+            background: white; 
+            border: 1px solid #d2d2d7; 
+            border-radius: 12px; 
+            object-fit: contain;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; }
     </style>
 </head>
 <body>
@@ -71,7 +92,7 @@
 
 <script>
     let animationInterval = null;
-    let frames = []; // Unser Filmstreifen
+    let frames = []; 
     let currentIndex = 0;
 
     function sanitizeText(rawText) {
@@ -110,11 +131,10 @@
         const textChunks = chunkText(cleanedText, maxChunkSize);
         const totalChunks = textChunks.length;
 
-        // 1. PRE-RENDERING: Wir berechnen die ganze Sequenz im Voraus
-        frames = []; // Alte Frames löschen
+        frames = []; 
         const qr = new QRious({
-            size: 400, // Hohe Auflösung für die Generierung
-            level: 'L' // Low Fehlerkorrektur = mehr Platz
+            size: 800, // Deutlich höhere interne Auflösung für das grosse Bild
+            level: 'L' 
         });
 
         for (let i = 0; i < totalChunks; i++) {
@@ -123,19 +143,14 @@
             const paddedTotal = String(totalChunks).padStart(3, '0');
             const payload = `${paddedCurrent}/${paddedTotal}|${textChunks[i]}`;
             
-            // Setzt den Wert im QR-Generator
             qr.value = payload;
-            
-            // Exportiert den generierten Code als fertiges Bild (.toDataURL) in unser Array
             frames.push(qr.toDataURL());
         }
 
-        // 2. ABSPIELEN: Der Stream selbst ist jetzt nur noch eine Diashow
         currentIndex = 0;
         if (animationInterval) clearInterval(animationInterval);
 
         animationInterval = setInterval(() => {
-            // Wir tauschen nur noch das fertige Bild aus
             document.getElementById("qr-image").src = frames[currentIndex];
             document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz)`;
             
