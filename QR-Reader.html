@@ -57,14 +57,15 @@
         #result-content td { padding: 10px 12px; border-bottom: 1px solid #e5e5ea; }
         #result-content tr:last-child td { border-bottom: none; }
         
-        .button-group { display: flex; gap: 12px; margin-top: 20px; }
-        button { flex: 2; padding: 14px; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
-        button:active { transform: scale(0.98); }
+        /* Layout-Anpassungen für 3 Buttons nebeneinander auf dem Handy */
+        .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: nowrap; }
+        button { flex: 1; padding: 12px 8px; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        button:active { transform: scale(0.96); }
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
-        .btn-reset { background-color: #f5f5f7; color: #ff3b30; flex: 1; font-weight: 500; }
+        .btn-share { background-color: #5856d6; box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); } /* Schickes Violett für den Teilen-Button */
+        .btn-reset { background-color: #f5f5f7; color: #ff3b30; font-weight: 500; }
         .btn-reset:hover { background-color: #e5e5ea; }
         
-        /* Design für das Entschlüsselungs-Interface */
         .crypto-ui { text-align: center; padding: 20px 0; }
         .crypto-ui h2 { margin-top: 0; font-size: 24px; color: #1d1d1f; }
         .crypto-ui p { color: #86868b; margin-bottom: 20px; }
@@ -100,7 +101,8 @@
         <div id="result-content"></div>
         
         <div class="button-group" id="cardButtons">
-            <button class="btn-copy" id="copyBtn" onclick="copyText()">Text kopieren 📋</button>
+            <button class="btn-copy" id="copyBtn" onclick="copyText()">Kopieren 📋</button>
+            <button class="btn-share" id="shareBtn" onclick="shareText()">Teilen 📤</button>
             <button class="btn-reset" onclick="resetScanner()">Neu scannen</button>
         </div>
     </div>
@@ -112,8 +114,6 @@
     let html5QrcodeScanner = null;
     let streamMode = 'TX'; 
     let rawAssembledText = ""; 
-    
-    // Globale Variablen für den Entschlüsselungsprozess
     let encryptedPayloadBase64 = "";
 
     function startScanner() {
@@ -132,11 +132,15 @@
         }).catch(err => {
             document.getElementById("status").innerText = "Kamerafehler: " + err;
         });
+
+        // Verstecke den Teilen-Button sofort, falls das Gerät/der Browser die Funktion nicht unterstützt
+        if (!navigator.share) {
+            document.getElementById('shareBtn').style.display = 'none';
+        }
     }
 
     function onScanSuccess(decodedText) {
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
-        
         if (!protocolMatch) return; 
 
         const currentFrame = parseInt(protocolMatch[1]);
@@ -152,11 +156,8 @@
 
         if (!receivedChunks[currentFrame]) {
             receivedChunks[currentFrame] = payload;
-            
             const receivedCount = Object.keys(receivedChunks).length;
-            const progressPercent = (receivedCount / totalFrames) * 100;
-            document.getElementById("progress").style.width = progressPercent + "%";
-            
+            document.getElementById("progress").style.width = (receivedCount / totalFrames) * 100 + "%";
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
 
             if (receivedCount === totalFrames) {
@@ -166,7 +167,6 @@
     }
 
     function assembleAndCheckEncryption() {
-        // UI minimieren
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("progressContainer").style.display = "none";
@@ -177,13 +177,10 @@
             fullAssembledString += receivedChunks[i];
         }
 
-        // Prüfen, ob die Daten AES-verschlüsselt sind (Modus EX oder EM)
         if (streamMode === 'EX' || streamMode === 'EM') {
             encryptedPayloadBase64 = fullAssembledString;
-            
-            // Tresor-Interface in die Karte injizieren
             document.getElementById("cardTypeHeader").innerText = "🔒 VERSCHLÜSSELTER EMPFANG";
-            document.getElementById("cardButtons").style.display = "none"; // Kopieren-Button ausblenden
+            document.getElementById("cardButtons").style.display = "none"; 
             
             document.getElementById("result-content").innerHTML = `
                 <div class="crypto-ui">
@@ -194,136 +191,3 @@
                     <p class="crypto-error" id="decryptError">Falscher PIN! Zugriff verweigert.</p>
                 </div>
             `;
-            
-            // Karte anzeigen
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-            
-        } else {
-            // Unverschlüsselte Daten direkt verarbeiten
-            processDecryptedData(fullAssembledString);
-        }
-    }
-
-    // Wird aufgerufen, wenn der Benutzer auf "Entschlüsseln" drückt
-    function attemptDecryption() {
-        const pin = document.getElementById("receiverPin").value;
-        try {
-            // 1. AES Entschlüsselung
-            const bytes = CryptoJS.AES.decrypt(encryptedPayloadBase64, pin);
-            const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-            
-            // Wenn der String leer ist, war der PIN zu 99% falsch
-            if (!decryptedString) throw new Error("Falscher PIN");
-            
-            // 2. Bei Erfolg UI wiederherstellen und Daten rendern
-            document.getElementById("cardButtons").style.display = "flex";
-            processDecryptedData(decryptedString);
-            
-        } catch (e) {
-            // Fehlermeldung anzeigen und Handy leicht rütteln
-            document.getElementById("decryptError").style.display = "block";
-            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-        }
-    }
-
-    // Verarbeitet den Klartext (entpackt ihn und rendert Markdown/LaTeX)
-    function processDecryptedData(payloadString) {
-        let finalDecodedText = payloadString;
-
-        // Dekomprimieren (Da auch verschlüsselte Daten vorher komprimiert wurden)
-        if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
-            try {
-                finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
-            } catch (e) {
-                document.getElementById("status").style.display = "block";
-                document.getElementById("status").innerText = "❌ Fehler bei der Dekompression!";
-                return;
-            }
-        }
-        
-        rawAssembledText = finalDecodedText; 
-        const contentArea = document.getElementById("result-content");
-        const headerArea = document.getElementById("cardTypeHeader");
-        
-        // Titel anpassen
-        if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
-            contentArea.innerHTML = marked.parse(finalDecodedText);
-            headerArea.innerText = "📝 Empfang: Markdown Dokument";
-        } else {
-            contentArea.innerText = finalDecodedText;
-            headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-        }
-
-        // Auto-Render für LaTeX
-        renderMathInElement(contentArea, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false}
-            ],
-            throwOnError: false
-        });
-        
-        // Wenn die Daten vorher unverschlüsselt waren, muss die Karte hier erst aufgedeckt werden
-        if (streamMode === 'TX' || streamMode === 'MD' || streamMode === 'CX' || streamMode === 'CM') {
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        }
-    }
-
-    function resetScanner() {
-        const card = document.getElementById("resultCard");
-        card.classList.remove("reveal");
-        
-        setTimeout(() => {
-            card.style.display = "none";
-            
-            document.getElementById("scannerContainer").classList.remove("minimized");
-            document.getElementById("progressContainer").style.display = "block";
-            document.getElementById("status").style.display = "block";
-            document.getElementById("scanLaser").style.display = "block";
-            
-            // Buttons standardmässig wieder einblenden für den nächsten unverschlüsselten Scan
-            document.getElementById("cardButtons").style.display = "flex";
-            
-            receivedChunks = {};
-            totalChunksCount = 0;
-            rawAssembledText = "";
-            encryptedPayloadBase64 = "";
-            
-            document.getElementById("progress").style.width = "0%";
-            document.getElementById("result-content").innerHTML = "";
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Text kopieren 📋";
-            copyBtn.style.backgroundColor = "#0071e3";
-        }, 400);
-    }
-
-    function copyText() {
-        if (!rawAssembledText) return;
-
-        navigator.clipboard.writeText(rawAssembledText).then(() => {
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "In Zwischenablage gesichert! ✓";
-            copyBtn.style.backgroundColor = "#34c759";
-            if (navigator.vibrate) navigator.vibrate(50);
-
-            setTimeout(() => {
-                copyBtn.innerText = "Text kopieren 📋";
-                copyBtn.style.backgroundColor = "#0071e3";
-            }, 2000);
-        });
-    }
-
-    window.addEventListener('DOMContentLoaded', startScanner);
-</script>
-
-</body>
-</html>
