@@ -6,6 +6,17 @@ Da keine Kabel, kein Internet, kein Bluetooth und kein WLAN im Spiel sind, ist d
 
 ---
 
+## 🔗 Direktlink zum Empfänger (Smartphone)
+
+Um den QR-Reader direkt auf dem iPhone oder Android-Gerät zu starten, nutze diesen Link:
+
+👉 **[Hier klicken, um den QR-Reader zu öffnen](https://josija-nydegger.github.io/QR-tool/QR-Reader.html)**
+
+Falls du den Link kopieren und beispielsweise per Messenger an dein Handy schicken möchtest, kannst du diese Adresse nutzen:
+https://josija-nydegger.github.io/QR-tool/QR-Reader.html
+
+---
+
 ## 🚀 Der "Sweet Spot" (Empfehlung)
 * **Geschwindigkeit:** 10 Hz (10 Frames pro Sekunde)
 * **Paketgrösse:** Gross (300 Zeichen pro Frame)
@@ -23,7 +34,7 @@ Diese Datei wird lokal auf dem Computer (z. B. Mac) ausgeführt.
 * **Pre-Rendering:** Um Abstürze im Browser zu verhindern, berechnet der Streamer alle QR-Codes als starre Bilder im Voraus (Filmrolle), bevor der Stream startet. Beim Abspielen werden nur noch die fertigen Bilder mit der gewünschten Hertz-Zahl (FPS) ausgetauscht.
 
 ### 2. `QR-Reader.html` (Der Empfänger)
-Diese Datei wird auf dem Smartphone ausgeführt und muss über eine sichere Verbindung (`https://`) aufgerufen werden (z. B. via GitHub Pages).
+Diese Datei wird auf dem Smartphone ausgeführt und über GitHub Pages unter der oben genannten HTTPS-Adresse bereitgestellt.
 * **Funktion:** Sie greift auf die Handykamera zu und analysiert den Videostream in Echtzeit mit 30 FPS.
 * **Protokoll-Header:** Jedes empfangene Paket enthält einen unsichtbaren Header (z. B. `001/010|...`). Der Reader erkennt dadurch die Reihenfolge, baut den Text wie ein Puzzle zusammen und signalisiert den Erfolg per Vibration.
 * **Clipboard-Integration:** Über einen dedizierten Button kann der empfangene Text direkt in die iOS/Android-Zwischenablage kopiert werden.
@@ -38,12 +49,11 @@ Diese Datei wird auf dem Smartphone ausgeführt und muss über eine sichere Verb
 
 ### Schritt 2: Den Empfänger einrichten (Smartphone via GitHub Pages)
 Da Smartphones den Kamerazugriff im Browser aus Datenschutzgründen nur über gesicherte Leitungen erlauben, ist das Hosting via GitHub Pages ideal:
-1. Erstelle ein öffentliches GitHub-Repository (z. B. namens `QR-tool`).
+1. Erstelle ein öffentliches GitHub-Repository namens `QR-tool`.
 2. Lade die Datei `QR-Reader.html` in dieses Repository hoch.
 3. Gehe in den Repository-Einstellungen auf **Settings -> Pages**.
 4. Wähle unter *Build and deployment* den `main`-Branch und den Ordner `/(root)` aus und klicke auf **Save**.
-5. Deine App ist nach ca. einer Minute unter folgender URL auf dem Handy erreichbar:
-   `https://DEIN-BENUTZERNAME.github.io/QR-tool/QR-Reader.html`
+5. Deine App ist nach ca. einer Minute unter dem oben angegebenen Link erreichbar.
 
 ---
 
@@ -51,7 +61,7 @@ Da Smartphones den Kamerazugriff im Browser aus Datenschutzgründen nur über ge
 
 1. Öffne den **QR-Streamer** auf dem PC und füge einen beliebig langen Text in das Textfeld ein.
 2. Stelle die **Paketgrösse** auf `Gross (300 Zeichen)` und die **Geschwindigkeit** auf `10` (FPS).
-3. Rufe auf dem Smartphone deine GitHub-Pages-URL im normalen **Safari-** oder **Chrome-Browser** auf und erlaube den Kamerazugriff.
+3. Rufe auf dem Smartphone den oben bereitgestellten **Link** auf und erlaube den Kamerazugriff.
 4. Klicke am PC auf **Stream starten** (der Streamer berechnet kurz die Frames und startet dann die Sequenz).
 5. Richte die Handykamera so auf den Bildschirm, dass der QR-Code gut im quadratischen Sucherfenster zu sehen ist.
 6. Der grüne Fortschrittsbalken füllt sich. Sobald alle Frames einmal erfasst wurden, ploppt der Text auf.
