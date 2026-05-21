@@ -289,4 +289,40 @@
             
             document.getElementById("scannerContainer").classList.remove("minimized");
             document.getElementById("progressContainer").style.display = "block";
-            document.getElementById("status").style.
+            document.getElementById("status").style.display = "block";
+            document.getElementById("scanLaser").style.display = "block";
+            
+            receivedChunks = {};
+            totalChunksCount = 0;
+            rawAssembledText = "";
+            document.getElementById("progress").style.width = "0%";
+            document.getElementById("result-content").innerHTML = "";
+            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
+            
+            const copyBtn = document.getElementById("copyBtn");
+            copyBtn.innerText = "Text kopieren 📋";
+            copyBtn.style.backgroundColor = "#0071e3";
+        }, 400);
+    }
+
+    function copyText() {
+        if (!rawAssembledText) return;
+
+        navigator.clipboard.writeText(rawAssembledText).then(() => {
+            const copyBtn = document.getElementById("copyBtn");
+            copyBtn.innerText = "In Zwischenablage gesichert! ✓";
+            copyBtn.style.backgroundColor = "#34c759";
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            setTimeout(() => {
+                copyBtn.innerText = "Text kopieren 📋";
+                copyBtn.style.backgroundColor = "#0071e3";
+            }, 2000);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', startScanner);
+</script>
+
+</body>
+</html>
