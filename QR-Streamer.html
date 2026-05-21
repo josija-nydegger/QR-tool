@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Grosses Bild)</title>
+    <title>QR-Code Datenüberträger (Sender - Mit Markdown)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         body {
@@ -26,63 +26,73 @@
         }
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
-        textarea { width: 100%; height: 120px; box-sizing: border-box; border: 1px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        
+        /* Design für die Modus-Auswahl */
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            background-color: #e5e5ea;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background-color: #0071e3;
+            color: white;
+        }
+
+        textarea { width: 100%; height: 140px; box-sizing: border-box; border: 1px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; }
+        #textStats { text-align: right; font-size: 13px; color: #86868b; margin-top: 5px; font-weight: 500; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
         select, input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
-        button { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        button.action-btn { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn-start { background-color: #0071e3; color: white; }
         .btn-stop { background-color: #ff3b30; color: white; display: none; }
         
-        #visualizer { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            margin-top: 30px; 
-            width: 100%;
-            max-width: 600px; /* Passt sich der Breite des oberen Kastens an */
-        }
-        
-        #qr-image { 
-            width: 100%; /* Füllt die verfügbare Breite komplett aus */
-            height: auto;
-            aspect-ratio: 1 / 1; /* Hält das Bild immer quadratisch */
-            padding: 20px; 
-            box-sizing: border-box;
-            background: white; 
-            border: 1px solid #d2d2d7; 
-            border-radius: 12px; 
-            object-fit: contain;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        
+        #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; width: 100%; max-width: 600px; }
+        #qr-image { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 20px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Pre-Rendered)</h1>
+    <h1>QR-Streamer (Markdown-Support)</h1>
     
-    <label for="textInput">Zu übertragender Text:</label>
-    <textarea id="textInput" placeholder="Kopiere hier deinen Text hinein..."></textarea>
+    <label>Text-Modus:</label>
+    <div class="mode-selector">
+        <button id="btnText" class="mode-btn active" onclick="setMode('TX')">Raw Text (Reintext)</button>
+        <button id="btnMarkdown" class="mode-btn" onclick="setMode('MD')">Markdown Text</button>
+    </div>
+    
+    <textarea id="textInput" placeholder="Schreibe Plaintext oder füge Markdown (z.B. **fett**, # Überschrift) hier ein..." oninput="updateStats()"></textarea>
+    <div id="textStats">0 Wörter, 0 Bytes</div>
     
     <div class="controls">
         <div>
             <label for="chunkSize">Paketgrösse:</label>
             <select id="chunkSize">
                 <option value="60">Sehr sicher (60 Zeichen)</option>
-                <option value="150" selected>Normal (150 Zeichen)</option>
-                <option value="300">Gross (300 Zeichen)</option>
+                <option value="150">Normal (150 Zeichen)</option>
+                <option value="300" selected>Gross (300 Zeichen - Sweet Spot)</option>
             </select>
         </div>
         <div>
             <label for="fps">Geschwindigkeit (FPS):</label>
-            <input type="number" id="fps" value="5" min="1" max="30">
+            <input type="number" id="fps" value="10" min="1" max="30">
         </div>
     </div>
     
-    <button id="startBtn" class="btn-start" onclick="startStreaming()">Stream starten</button>
-    <button id="stopBtn" class="btn-stop" onclick="stopStreaming()">Stream stoppen</button>
+    <button id="startBtn" class="action-btn btn-start" onclick="startStreaming()">Stream starten</button>
+    <button id="stopBtn" class="action-btn btn-stop" onclick="stopStreaming()">Stream stoppen</button>
 </div>
 
 <div id="visualizer">
@@ -94,6 +104,22 @@
     let animationInterval = null;
     let frames = []; 
     let currentIndex = 0;
+    let currentMode = 'TX'; // Standardmässig Reintext
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById("btnText").classList.toggle("active", mode === 'TX');
+        document.getElementById("btnMarkdown").classList.toggle("active", mode === 'MD');
+    }
+
+    function updateStats() {
+        const text = document.getElementById("textInput").value;
+        const words = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+        const bytes = new Blob([text]).size;
+        let sizeString = bytes + " Bytes";
+        if (bytes >= 1024) sizeString = (bytes / 1024).toFixed(2) + " KB";
+        document.getElementById("textStats").innerText = `${words} Wörter, ${sizeString}`;
+    }
 
     function sanitizeText(rawText) {
         return rawText
@@ -132,16 +158,15 @@
         const totalChunks = textChunks.length;
 
         frames = []; 
-        const qr = new QRious({
-            size: 800, // Deutlich höhere interne Auflösung für das grosse Bild
-            level: 'L' 
-        });
+        const qr = new QRious({ size: 800, level: 'L' });
 
         for (let i = 0; i < totalChunks; i++) {
             const frameNumber = i + 1;
             const paddedCurrent = String(frameNumber).padStart(3, '0');
             const paddedTotal = String(totalChunks).padStart(3, '0');
-            const payload = `${paddedCurrent}/${paddedTotal}|${textChunks[i]}`;
+            
+            // Protokoll enthält jetzt den Modus: "001/010|MD|Inhalt"
+            const payload = `${paddedCurrent}/${paddedTotal}|${currentMode}|${textChunks[i]}`;
             
             qr.value = payload;
             frames.push(qr.toDataURL());
@@ -152,8 +177,7 @@
 
         animationInterval = setInterval(() => {
             document.getElementById("qr-image").src = frames[currentIndex];
-            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz)`;
-            
+            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz) [Modus: ${currentMode}]`;
             currentIndex = (currentIndex + 1) % totalChunks;
         }, 1000 / fps);
     }
