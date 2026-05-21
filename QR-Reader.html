@@ -12,54 +12,18 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f5f5f7;
-            color: #1d1d1f;
-            padding: 15px;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            overflow-x: hidden;
-        }
-        .container {
-            max-width: 500px;
-            width: 100%;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; padding: 15px; margin: 0; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
+        .container { max-width: 500px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
         h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
         
-        /* --- SCANNER WRAPPER & TRANSITION --- */
-        .scanner-wrapper {
-            position: relative;
-            width: 100%;
-            border-radius: 16px;
-            overflow: hidden;
-            background: #000;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .scanner-wrapper.minimized {
-            height: 120px !important;
-            opacity: 0.6;
-            margin-bottom: 10px;
-        }
-        #reader {
-            width: 100%;
-            border: none;
-        }
+        .scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .scanner-wrapper.minimized { height: 120px !important; opacity: 0.6; margin-bottom: 10px; }
+        #reader { width: 100%; border: none; }
         
-        /* Neon-Fokus-Rahmen */
-        .scan-frame {
-            position: absolute;
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 70%; aspect-ratio: 1 / 1;
-            pointer-events: none; z-index: 10; display: none; transition: all 0.3s ease;
-        }
+        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; aspect-ratio: 1 / 1; pointer-events: none; z-index: 10; display: none; transition: all 0.3s ease; }
         .scanner-wrapper.minimized .scan-frame { display: none !important; }
         .scan-corner { position: absolute; width: 30px; height: 30px; border-color: #0071e3; border-style: solid; box-shadow: 0 0 12px rgba(0, 113, 227, 0.3); }
         .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
@@ -67,32 +31,19 @@
         .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 8px; }
         .bottom-right { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
         
-        /* Pulsierender Laser */
-        .scan-laser {
-            position: absolute; top: 0; left: 5%; width: 90%; height: 2px;
-            background-color: #0071e3; box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8);
-            animation: scan 2.5s infinite linear alternate;
-        }
+        .scan-laser { position: absolute; top: 0; left: 5%; width: 90%; height: 2px; background-color: #0071e3; box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8); animation: scan 2.5s infinite linear alternate; }
         @keyframes scan { 0% { top: 8%; } 100% { top: 92%; } }
 
-        /* Status & Progress */
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 5px 0; transition: all 0.3s; }
         .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 20px; }
         .progress-fill { height: 100%; width: 0%; background-color: #0071e3; transition: width 0.15s ease; }
         
-        /* Live-Ergebnis-Karte */
-        .result-card {
-            width: 100%; background: white; border-radius: 20px; padding: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box;
-            transform: translateY(40px); opacity: 0; display: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+        .result-card { width: 100%; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; transform: translateY(40px); opacity: 0; display: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
         .result-card.reveal { display: block; transform: translateY(0); opacity: 1; margin-top: 15px; }
         .card-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #86868b; margin-bottom: 12px; border-bottom: 1px solid #f2f2f7; padding-bottom: 6px; }
         
-        /* Das gerenderte Inhaltsfeld */
-        #result-content { font-size: 16px; line-height: 1.5; color: #1d1d1f; max-height: 280px; overflow-y: auto; padding-right: 5px; }
+        #result-content { font-size: 16px; line-height: 1.5; color: #1d1d1f; max-height: 350px; overflow-y: auto; padding-right: 5px; }
         
-        /* Markdown-Styling im Inneren der Karte */
         #result-content h1 { font-size: 22px; margin: 0 0 10px 0; color: #000; }
         #result-content h2 { font-size: 18px; margin: 15px 0 8px 0; color: #000; }
         #result-content p { margin: 0 0 12px 0; }
@@ -101,41 +52,25 @@
         #result-content code { background: #f2f2f7; padding: 3px 6px; border-radius: 6px; font-family: monospace; font-size: 14px; }
         #result-content a { color: #0071e3; text-decoration: none; }
         
-/* --- NEU: Styling für Markdown-Tabellen (Obsidian-Style) --- */
-        #result-content table { 
-            border-collapse: collapse; 
-            width: calc(100% - 4px); /* Minimal schmaler machen */
-            margin: 15px 2px;        /* 2px Abstand für den Schatten links/rechts */
-            border-radius: 8px; 
-            overflow: hidden; 
-            box-shadow: 0 0 0 1px #d2d2d7; 
-            font-size: 14px;
-        }
-        #result-content th { 
-            background-color: #f2f2f7; 
-            font-weight: 600; 
-            text-align: left; 
-            padding: 10px 12px; 
-            border-bottom: 1px solid #d2d2d7; 
-        }
-        #result-content td { 
-            padding: 10px 12px; 
-            border-bottom: 1px solid #e5e5ea; 
-        }
-        #result-content tr:last-child td { 
-            border-bottom: none; 
-        }
-        #result-content { 
-            overflow-x: auto; 
-        }
+        #result-content table { border-collapse: collapse; width: calc(100% - 4px); margin: 15px 2px; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px #d2d2d7; font-size: 14px; }
+        #result-content th { background-color: #f2f2f7; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #d2d2d7; }
+        #result-content td { padding: 10px 12px; border-bottom: 1px solid #e5e5ea; }
+        #result-content tr:last-child td { border-bottom: none; }
         
-        /* Button Bedienleiste am Fussende */
         .button-group { display: flex; gap: 12px; margin-top: 20px; }
         button { flex: 2; padding: 14px; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
         button:active { transform: scale(0.98); }
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
         .btn-reset { background-color: #f5f5f7; color: #ff3b30; flex: 1; font-weight: 500; }
         .btn-reset:hover { background-color: #e5e5ea; }
+        
+        /* Design für das Entschlüsselungs-Interface */
+        .crypto-ui { text-align: center; padding: 20px 0; }
+        .crypto-ui h2 { margin-top: 0; font-size: 24px; color: #1d1d1f; }
+        .crypto-ui p { color: #86868b; margin-bottom: 20px; }
+        .crypto-ui input { width: 100%; padding: 14px; margin-bottom: 15px; border-radius: 10px; border: 1px solid #d2d2d7; box-sizing: border-box; font-size: 18px; text-align: center; font-family: monospace; letter-spacing: 3px; }
+        .crypto-ui button { background-color: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2); width: 100%; }
+        .crypto-error { color: #ff3b30; margin-top: 15px; display: none; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -164,7 +99,7 @@
         <div class="card-header" id="cardTypeHeader">Empfangene Daten</div>
         <div id="result-content"></div>
         
-        <div class="button-group">
+        <div class="button-group" id="cardButtons">
             <button class="btn-copy" id="copyBtn" onclick="copyText()">Text kopieren 📋</button>
             <button class="btn-reset" onclick="resetScanner()">Neu scannen</button>
         </div>
@@ -177,6 +112,9 @@
     let html5QrcodeScanner = null;
     let streamMode = 'TX'; 
     let rawAssembledText = ""; 
+    
+    // Globale Variablen für den Entschlüsselungsprozess
+    let encryptedPayloadBase64 = "";
 
     function startScanner() {
         html5QrcodeScanner = new Html5Qrcode("reader");
@@ -222,12 +160,13 @@
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
 
             if (receivedCount === totalFrames) {
-                assembleText();
+                assembleAndCheckEncryption();
             }
         }
     }
 
-    function assembleText() {
+    function assembleAndCheckEncryption() {
+        // UI minimieren
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("progressContainer").style.display = "none";
@@ -237,15 +176,71 @@
         for (let i = 1; i <= totalChunksCount; i++) {
             fullAssembledString += receivedChunks[i];
         }
-        
-        let finalDecodedText = fullAssembledString;
 
-        if (streamMode === 'CX' || streamMode === 'CM') {
+        // Prüfen, ob die Daten AES-verschlüsselt sind (Modus EX oder EM)
+        if (streamMode === 'EX' || streamMode === 'EM') {
+            encryptedPayloadBase64 = fullAssembledString;
+            
+            // Tresor-Interface in die Karte injizieren
+            document.getElementById("cardTypeHeader").innerText = "🔒 VERSCHLÜSSELTER EMPFANG";
+            document.getElementById("cardButtons").style.display = "none"; // Kopieren-Button ausblenden
+            
+            document.getElementById("result-content").innerHTML = `
+                <div class="crypto-ui">
+                    <h2>Geschützte Daten</h2>
+                    <p>Dieser Stream ist mit einem PIN verschlüsselt. Bitte gib den Schlüssel ein, um den Text zu lesen.</p>
+                    <input type="password" id="receiverPin" placeholder="PIN eingeben">
+                    <button onclick="attemptDecryption()">Entschlüsseln 🔓</button>
+                    <p class="crypto-error" id="decryptError">Falscher PIN! Zugriff verweigert.</p>
+                </div>
+            `;
+            
+            // Karte anzeigen
+            const card = document.getElementById("resultCard");
+            card.style.display = "block";
+            setTimeout(() => { card.classList.add("reveal"); }, 50);
+            
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            
+        } else {
+            // Unverschlüsselte Daten direkt verarbeiten
+            processDecryptedData(fullAssembledString);
+        }
+    }
+
+    // Wird aufgerufen, wenn der Benutzer auf "Entschlüsseln" drückt
+    function attemptDecryption() {
+        const pin = document.getElementById("receiverPin").value;
+        try {
+            // 1. AES Entschlüsselung
+            const bytes = CryptoJS.AES.decrypt(encryptedPayloadBase64, pin);
+            const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+            
+            // Wenn der String leer ist, war der PIN zu 99% falsch
+            if (!decryptedString) throw new Error("Falscher PIN");
+            
+            // 2. Bei Erfolg UI wiederherstellen und Daten rendern
+            document.getElementById("cardButtons").style.display = "flex";
+            processDecryptedData(decryptedString);
+            
+        } catch (e) {
+            // Fehlermeldung anzeigen und Handy leicht rütteln
+            document.getElementById("decryptError").style.display = "block";
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        }
+    }
+
+    // Verarbeitet den Klartext (entpackt ihn und rendert Markdown/LaTeX)
+    function processDecryptedData(payloadString) {
+        let finalDecodedText = payloadString;
+
+        // Dekomprimieren (Da auch verschlüsselte Daten vorher komprimiert wurden)
+        if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
             try {
-                finalDecodedText = LZString.decompressFromEncodedURIComponent(fullAssembledString);
+                finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
             } catch (e) {
                 document.getElementById("status").style.display = "block";
-                document.getElementById("status").innerText = "❌ Dekompressionsfehler!";
+                document.getElementById("status").innerText = "❌ Fehler bei der Dekompression!";
                 return;
             }
         }
@@ -254,7 +249,8 @@
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
         
-        if (streamMode === 'MD' || streamMode === 'CM') {
+        // Titel anpassen
+        if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
             contentArea.innerHTML = marked.parse(finalDecodedText);
             headerArea.innerText = "📝 Empfang: Markdown Dokument";
         } else {
@@ -262,7 +258,7 @@
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
         }
 
-        // Auto-Render für LaTeX (KaTeX) ausführen
+        // Auto-Render für LaTeX
         renderMathInElement(contentArea, {
             delimiters: [
                 {left: '$$', right: '$$', display: true},
@@ -271,13 +267,13 @@
             throwOnError: false
         });
         
-        const card = document.getElementById("resultCard");
-        card.style.display = "block";
-        setTimeout(() => {
-            card.classList.add("reveal");
-        }, 50);
-        
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        // Wenn die Daten vorher unverschlüsselt waren, muss die Karte hier erst aufgedeckt werden
+        if (streamMode === 'TX' || streamMode === 'MD' || streamMode === 'CX' || streamMode === 'CM') {
+            const card = document.getElementById("resultCard");
+            card.style.display = "block";
+            setTimeout(() => { card.classList.add("reveal"); }, 50);
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        }
     }
 
     function resetScanner() {
@@ -292,9 +288,14 @@
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             
+            // Buttons standardmässig wieder einblenden für den nächsten unverschlüsselten Scan
+            document.getElementById("cardButtons").style.display = "flex";
+            
             receivedChunks = {};
             totalChunksCount = 0;
             rawAssembledText = "";
+            encryptedPayloadBase64 = "";
+            
             document.getElementById("progress").style.width = "0%";
             document.getElementById("result-content").innerHTML = "";
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
