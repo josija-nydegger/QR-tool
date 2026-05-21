@@ -2,13 +2,13 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Krypto & Drop)</title>
+    <title>QR-Code Datenüberträger (Sender - Kino-Edition)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; display: flex; flex-direction: column; align-items: center; padding: 30px; margin: 0; }
-        .container { max-width: 600px; width: 100%; background: white; padding: 24px; border-radius: 12px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; display: flex; flex-direction: column; align-items: center; padding: 30px; margin: 0; transition: background-color 0.3s; }
+        .container { max-width: 600px; width: 100%; background: white; padding: 24px; border-radius: 12px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: opacity 0.3s; }
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
         
@@ -20,7 +20,6 @@
         textarea:focus { outline: none; border-color: #0071e3; }
         textarea.drag-active { background-color: #eef6fc; border: 2px dashed #0071e3; }
         
-        /* NEU: Flexbox-Container für den Clear-Button und die Statistik */
         .textarea-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
         .btn-clear { background: none; border: none; color: #ff3b30; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; transition: opacity 0.2s; }
         .btn-clear:hover { opacity: 0.7; }
@@ -29,15 +28,11 @@
         .pin-container { margin-top: 15px; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; }
         .pin-container label { margin-top: 0; color: #1d1d1f; }
         
-        /* NEU: Custom Wrapper für das PIN-Feld mit robustem Auge */
         .pin-input-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
         .pin-input-wrapper input { width: 100%; box-sizing: border-box; padding: 10px 40px 10px 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; }
-        
-        /* Native Browser-Augen radikal deaktivieren */
         input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
         input[type="password"]::-webkit-credentials-auto-fill-button { visibility: hidden; }
         
-        /* Unser eigenes Auge */
         .eye-btn { position: absolute; right: 5px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; padding: 8px; }
         .eye-btn:hover { opacity: 1; }
 
@@ -46,13 +41,26 @@
 
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         select, input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
-        button.action-btn { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
-        .btn-start { background-color: #0071e3; color: white; }
-        .btn-stop { background-color: #ff3b30; color: white; display: none; }
         
-        #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; width: 100%; max-width: 600px; }
-        #qr-image { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 20px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; }
+        /* Action Buttons Layout */
+        .action-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        button.action-btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-start { background-color: #0071e3; color: white; }
+        .btn-start:hover { background-color: #005bb5; }
+        .btn-kino { background-color: #1d1d1f; color: white; }
+        .btn-kino:hover { background-color: #000; }
+        .btn-stop { background-color: #ff3b30; color: white; display: none; width: 100%; margin-top: 20px; }
+        
+        #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; width: 100%; max-width: 600px; cursor: default; }
+        #qr-image { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 20px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: all 0.3s; }
+        #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; transition: opacity 0.3s; }
+
+        /* --- NEU: KINO-MODUS STYLES --- */
+        body.kino-mode { background-color: #000; justify-content: center; height: 100vh; overflow: hidden; padding: 0; }
+        body.kino-mode .container { display: none; /* Versteckt alle Menüs */ }
+        body.kino-mode #visualizer { margin-top: 0; max-width: 100vw; height: 100vh; justify-content: center; cursor: pointer; /* Klick-Zeiger zum Beenden */ }
+        body.kino-mode #qr-image { max-height: 85vh; max-width: 85vw; padding: 35px; border-radius: 20px; border: none; box-shadow: 0 0 50px rgba(255,255,255,0.1); }
+        body.kino-mode #status { color: #333; position: absolute; bottom: 15px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -102,11 +110,14 @@
         </div>
     </div>
     
-    <button id="startBtn" class="action-btn btn-start" onclick="startStreaming()">Stream starten</button>
+    <div class="action-buttons" id="actionBtns">
+        <button class="action-btn btn-start" onclick="startStreaming(false)">Stream starten</button>
+        <button class="action-btn btn-kino" onclick="startStreaming(true)">Kino-Modus 🎬</button>
+    </div>
     <button id="stopBtn" class="action-btn btn-stop" onclick="stopStreaming()">Stream stoppen</button>
 </div>
 
-<div id="visualizer">
+<div id="visualizer" onclick="exitKinoModeOnClick()">
     <img id="qr-image" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Warte auf Start..." />
     <div id="status">Bereit zum Senden</div>
 </div>
@@ -117,27 +128,23 @@
     let currentIndex = 0;
     let currentMode = 'TX';
 
-    // Textfeld leeren
     function clearText() {
         document.getElementById('textInput').value = "";
         updateStats();
     }
 
-    // PIN Sichtbarkeit umschalten (Custom Eye Button)
     function togglePinVisibility() {
         const pinInput = document.getElementById("pinInput");
         const eyeBtn = document.getElementById("eyeToggle");
-        
         if (pinInput.type === "password") {
             pinInput.type = "text";
-            eyeBtn.innerText = "🙈"; // Ausgeblendetes Auge
+            eyeBtn.innerText = "🙈"; 
         } else {
             pinInput.type = "password";
-            eyeBtn.innerText = "👁️"; // Sichtbares Auge
+            eyeBtn.innerText = "👁️"; 
         }
     }
 
-    // Drag & Drop Logik
     const dropZone = document.getElementById('textInput');
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
     dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-active'); });
@@ -187,7 +194,8 @@
         return chunks;
     }
 
-    function startStreaming() {
+    // --- NEU: LOGIK FÜR DEN KINO-MODUS ---
+    function startStreaming(useKinoMode) {
         let rawText = document.getElementById("textInput").value;
         let pinInput = document.getElementById("pinInput");
         let pin = pinInput.value;
@@ -197,13 +205,12 @@
 
         if (!shouldRemember) {
             pinInput.value = "";
-            // Wenn gelöscht wird, auch die Sichtbarkeit aus Sicherheitsgründen zurücksetzen
             pinInput.type = "password";
             document.getElementById("eyeToggle").innerText = "👁️";
         }
 
         document.getElementById("status").innerText = "Verarbeite Daten und berechne Frames...";
-        document.getElementById("startBtn").style.display = "none";
+        document.getElementById("actionBtns").style.display = "none";
         document.getElementById("stopBtn").style.display = "block";
 
         const cleanedText = sanitizeText(rawText);
@@ -245,17 +252,48 @@
             if (transmitMode === 'EX' || transmitMode === 'EM') {
                 statusText += " 🔒"; 
             }
+            if(useKinoMode) statusText += " (Klick zum Beenden)";
             document.getElementById("status").innerText = statusText;
             currentIndex = (currentIndex + 1) % totalChunks;
         }, 1000 / fps);
+
+        // Kino-Modus aktivieren, falls gewünscht
+        if (useKinoMode) {
+            document.body.classList.add('kino-mode');
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log("Vollbild blockiert: " + err.message);
+                });
+            }
+        }
     }
 
     function stopStreaming() {
         if (animationInterval) clearInterval(animationInterval);
-        document.getElementById("startBtn").style.display = "block";
+        document.getElementById("actionBtns").style.display = "flex";
         document.getElementById("stopBtn").style.display = "none";
         document.getElementById("status").innerText = "Stream gestoppt";
+        
+        // Kino-Modus sicher beenden
+        document.body.classList.remove('kino-mode');
+        if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen();
+        }
     }
+
+    // Wenn der Nutzer im Kino-Modus auf den schwarzen Hintergrund klickt
+    function exitKinoModeOnClick() {
+        if (document.body.classList.contains('kino-mode')) {
+            stopStreaming();
+        }
+    }
+
+    // Wenn der Nutzer ESC drückt, um das Vollbild zu verlassen
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && document.body.classList.contains('kino-mode')) {
+            stopStreaming();
+        }
+    });
 </script>
 
 </body>
