@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR-Code Datenüberträger (Empfänger)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -26,74 +27,42 @@
             box-sizing: border-box;
         }
         h1 { font-size: 20px; margin-top: 0; text-align: center; }
-        #reader {
-            width: 100%;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-        .progress-bar {
-            width: 100%;
-            background-color: #e5e5ea;
-            border-radius: 6px;
-            margin: 15px 0;
-            height: 12px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background-color: #34c759;
-            transition: width 0.2s ease;
-        }
-        #status {
-            font-weight: 600;
-            font-size: 14px;
-            color: #86868b;
-            text-align: center;
-            margin-bottom: 15px;
-        }
+        #reader { width: 100%; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+        .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 6px; margin: 15px 0; height: 12px; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; background-color: #34c759; transition: width 0.2s ease; }
+        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin-bottom: 15px; }
+        
+        /* Optimiertes Textfeld für gerendertes Markdown-Design */
         #result {
             width: 100%;
-            height: 150px;
+            height: 200px;
             box-sizing: border-box;
             border: 1px solid #d2d2d7;
             border-radius: 6px;
-            padding: 10px;
+            padding: 12px;
             font-size: 14px;
             background-color: #fafafa;
+            overflow-y: auto;
         }
         
-        /* Neues Design für die Buttons nebeneinander */
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        button {
-            flex: 1; /* Beide Buttons teilen sich den Platz 50/50 */
-            padding: 12px;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-        .btn-reset {
-            background-color: #ff3b30;
-        }
-        .btn-copy {
-            background-color: #0071e3;
-        }
+        /* Markdown In-App Styling */
+        #result h1, #result h2, #result h3 { margin-top: 0; margin-bottom: 8px; color: #000; }
+        #result h1 { font-size: 18px; }
+        #result h2 { font-size: 16px; }
+        #result p { margin: 0 0 8px 0; line-height: 1.4; }
+        #result ul, #result ol { margin: 0 0 10px 0; padding-left: 20px; }
+        #result code { background: #e5e5ea; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+        
+        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 12px; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease; }
+        .btn-reset { background-color: #ff3b30; }
+        .btn-copy { background-color: #0071e3; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>QR-Receiver (Daten-Empfänger)</h1>
+    <h1>QR-Receiver (Markdown-Ready)</h1>
     
     <div id="reader"></div>
     
@@ -103,8 +72,8 @@
         <div id="progress" class="progress-fill"></div>
     </div>
     
-    <label style="font-weight:600; font-size:14px;">Empfangener Text:</label>
-    <div id="result" style="overflow-y: auto; white-space: pre-wrap;"></div>
+    <label style="font-weight:600; font-size:14px;" id="outputLabel">Empfangener Inhalt:</label>
+    <div id="result"></div>
     
     <div class="button-group">
         <button class="btn-copy" id="copyBtn" onclick="copyText()">Text kopieren</button>
@@ -116,10 +85,11 @@
     let receivedChunks = {};
     let totalChunksCount = 0;
     let html5QrcodeScanner = null;
+    let streamMode = 'TX'; // Erkennt automatisch TX oder MD
+    let rawAssembledText = ""; // Speichert den rohen Markdown-Code zum Kopieren
 
     function startScanner() {
         html5QrcodeScanner = new Html5Qrcode("reader");
-        
         const config = { 
             fps: 30, 
             qrbox: function(viewfinderWidth, viewfinderHeight) {
@@ -127,11 +97,8 @@
             }
         };
 
-        html5QrcodeScanner.start(
-            { facingMode: "environment" }, 
-            config, 
-            onScanSuccess
-        ).then(() => {
+        html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
+        .then(() => {
             document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
         }).catch(err => {
             document.getElementById("status").innerText = "Kamerafehler: " + err;
@@ -139,17 +106,20 @@
     }
 
     function onScanSuccess(decodedText) {
-        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([\s\S]*)$/);
+        // Neues Regex-Muster fängt den Modus ab: "001/010|MD|Inhalt"
+        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
         
         if (!protocolMatch) return; 
 
         const currentFrame = parseInt(protocolMatch[1]);
         const totalFrames = parseInt(protocolMatch[2]);
-        const payload = protocolMatch[3];
+        const frameMode = protocolMatch[3];
+        const payload = protocolMatch[4];
 
         if (totalChunksCount !== totalFrames) {
             totalChunksCount = totalFrames;
             receivedChunks = {};
+            streamMode = frameMode; // Setzt den globalen Modus für diesen Stream
         }
 
         if (!receivedChunks[currentFrame]) {
@@ -159,7 +129,7 @@
             const progressPercent = (receivedCount / totalFrames) * 100;
             document.getElementById("progress").style.width = progressPercent + "%";
             
-            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen geladen`;
+            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen (${streamMode})`;
 
             if (receivedCount === totalFrames) {
                 assembleText();
@@ -173,7 +143,19 @@
             fullText += receivedChunks[i];
         }
         
-        document.getElementById("result").innerText = fullText;
+        rawAssembledText = fullText; // Rohen Text im Speicher sichern
+        const resultContainer = document.getElementById("result");
+        
+        if (streamMode === 'MD') {
+            // Rendert Markdown zu echtem, formatiertem HTML
+            resultContainer.innerHTML = marked.parse(fullText);
+            document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Markdown gerendert):";
+        } else {
+            // Klassischer Reintext-Modus
+            resultContainer.innerText = fullText;
+            document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Reintext):";
+        }
+        
         document.getElementById("status").innerText = "🎉 Übertragung vollständig!";
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     }
@@ -181,36 +163,30 @@
     function resetScanner() {
         receivedChunks = {};
         totalChunksCount = 0;
+        rawAssembledText = "";
         document.getElementById("progress").style.width = "0%";
-        document.getElementById("result").innerText = "";
+        document.getElementById("result").innerHTML = "";
+        document.getElementById("outputLabel").innerText = "Empfangener Inhalt:";
         document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
         
-        // Button-Farbe sicherheitshalber zurücksetzen, falls während des Kopierens auf Zurücksetzen geklickt wurde
         const copyBtn = document.getElementById("copyBtn");
         copyBtn.innerText = "Text kopieren";
         copyBtn.style.backgroundColor = "#0071e3";
     }
 
-    // Neue Funktion zum Kopieren des Textes in die Zwischenablage
     function copyText() {
-        const text = document.getElementById("result").innerText;
-        const copyBtn = document.getElementById("copyBtn");
-
-        if (!text) {
+        if (!rawAssembledText) {
             alert("Es gibt noch keinen Text zum Kopieren!");
             return;
         }
 
-        // Nutzt die native Zwischenablage des iPhones
-        navigator.clipboard.writeText(text).then(() => {
-            // Erfolgreiches Feedback: Button wird grün
+        // Kopiert immer den ROHEI Text (inkl. Markdown-Tags), perfekt für Editoren!
+        navigator.clipboard.writeText(rawAssembledText).then(() => {
+            const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopiert! ✓";
             copyBtn.style.backgroundColor = "#34c759";
-            
-            // Haptisches Feedback (kurze Vibration)
             if (navigator.vibrate) navigator.vibrate(50);
 
-            // Nach 2 Sekunden wird der Button wieder normal
             setTimeout(() => {
                 copyBtn.innerText = "Text kopieren";
                 copyBtn.style.backgroundColor = "#0071e3";
