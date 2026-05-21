@@ -33,7 +33,7 @@
         }
         h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
         
-        /* Scanner Wrapper & Transition */
+        /* --- SCANNER WRAPPER & TRANSITION --- */
         .scanner-wrapper {
             position: relative;
             width: 100%;
@@ -43,8 +43,15 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .scanner-wrapper.minimized { height: 120px !important; opacity: 0.6; margin-bottom: 10px; }
-        #reader { width: 100%; border: none; }
+        .scanner-wrapper.minimized {
+            height: 120px !important;
+            opacity: 0.6;
+            margin-bottom: 10px;
+        }
+        #reader {
+            width: 100%;
+            border: none;
+        }
         
         /* Neon-Fokus-Rahmen */
         .scan-frame {
@@ -82,7 +89,10 @@
         .result-card.reveal { display: block; transform: translateY(0); opacity: 1; margin-top: 15px; }
         .card-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #86868b; margin-bottom: 12px; border-bottom: 1px solid #f2f2f7; padding-bottom: 6px; }
         
+        /* Das gerenderte Inhaltsfeld */
         #result-content { font-size: 16px; line-height: 1.5; color: #1d1d1f; max-height: 280px; overflow-y: auto; padding-right: 5px; }
+        
+        /* Markdown-Styling im Inneren der Karte */
         #result-content h1 { font-size: 22px; margin: 0 0 10px 0; color: #000; }
         #result-content h2 { font-size: 18px; margin: 15px 0 8px 0; color: #000; }
         #result-content p { margin: 0 0 12px 0; }
@@ -91,12 +101,41 @@
         #result-content code { background: #f2f2f7; padding: 3px 6px; border-radius: 6px; font-family: monospace; font-size: 14px; }
         #result-content a { color: #0071e3; text-decoration: none; }
         
-        /* Button Bedienleiste */
+        /* --- NEU: Styling für Markdown-Tabellen (Obsidian-Style) --- */
+        #result-content table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin: 15px 0; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            box-shadow: 0 0 0 1px #d2d2d7; 
+            font-size: 14px;
+        }
+        #result-content th { 
+            background-color: #f2f2f7; 
+            font-weight: 600; 
+            text-align: left; 
+            padding: 10px 12px; 
+            border-bottom: 1px solid #d2d2d7; 
+        }
+        #result-content td { 
+            padding: 10px 12px; 
+            border-bottom: 1px solid #e5e5ea; 
+        }
+        #result-content tr:last-child td { 
+            border-bottom: none; 
+        }
+        #result-content { 
+            overflow-x: auto; 
+        }
+        
+        /* Button Bedienleiste am Fussende */
         .button-group { display: flex; gap: 12px; margin-top: 20px; }
         button { flex: 2; padding: 14px; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
         button:active { transform: scale(0.98); }
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
         .btn-reset { background-color: #f5f5f7; color: #ff3b30; flex: 1; font-weight: 500; }
+        .btn-reset:hover { background-color: #e5e5ea; }
     </style>
 </head>
 <body>
@@ -159,6 +198,7 @@
 
     function onScanSuccess(decodedText) {
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
+        
         if (!protocolMatch) return; 
 
         const currentFrame = parseInt(protocolMatch[1]);
@@ -174,8 +214,11 @@
 
         if (!receivedChunks[currentFrame]) {
             receivedChunks[currentFrame] = payload;
+            
             const receivedCount = Object.keys(receivedChunks).length;
-            document.getElementById("progress").style.width = (receivedCount / totalFrames) * 100 + "%";
+            const progressPercent = (receivedCount / totalFrames) * 100;
+            document.getElementById("progress").style.width = progressPercent + "%";
+            
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
 
             if (receivedCount === totalFrames) {
@@ -213,24 +256,26 @@
         
         if (streamMode === 'MD' || streamMode === 'CM') {
             contentArea.innerHTML = marked.parse(finalDecodedText);
-            headerArea.innerText = "📝 Empfängnis: Markdown & LaTeX";
+            headerArea.innerText = "📝 Empfang: Markdown Dokument";
         } else {
             contentArea.innerText = finalDecodedText;
-            headerArea.innerText = "📄 Empfängnis: Reiner Text & LaTeX";
+            headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
         }
 
-        // NEU: Auto-Render für LaTeX (KaTeX) ausführen
+        // Auto-Render für LaTeX (KaTeX) ausführen
         renderMathInElement(contentArea, {
             delimiters: [
-                {left: '$$', right: '$$', display: true},  // Formeln zentriert in einer eigenen Zeile
-                {left: '$', right: '$', display: false}    // Formeln fortlaufend im Text (Inline)
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false}
             ],
-            throwOnError: false // Verhindert, dass die App bei einem Tippfehler in der Formel abstürzt
+            throwOnError: false
         });
         
         const card = document.getElementById("resultCard");
         card.style.display = "block";
-        setTimeout(() => { card.classList.add("reveal"); }, 50);
+        setTimeout(() => {
+            card.classList.add("reveal");
+        }, 50);
         
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     }
@@ -241,38 +286,7 @@
         
         setTimeout(() => {
             card.style.display = "none";
+            
             document.getElementById("scannerContainer").classList.remove("minimized");
             document.getElementById("progressContainer").style.display = "block";
-            document.getElementById("status").style.display = "block";
-            document.getElementById("scanLaser").style.display = "block";
-            
-            receivedChunks = {}; totalChunksCount = 0; rawAssembledText = "";
-            document.getElementById("progress").style.width = "0%";
-            document.getElementById("result-content").innerHTML = "";
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Text kopieren 📋";
-            copyBtn.style.backgroundColor = "#0071e3";
-        }, 400); 
-    }
-
-    function copyText() {
-        if (!rawAssembledText) return;
-        navigator.clipboard.writeText(rawAssembledText).then(() => {
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "In Zwischenablage gesichert! ✓";
-            copyBtn.style.backgroundColor = "#34c759";
-            if (navigator.vibrate) navigator.vibrate(50);
-            setTimeout(() => {
-                copyBtn.innerText = "Text kopieren 📋";
-                copyBtn.style.backgroundColor = "#0071e3";
-            }, 2000);
-        });
-    }
-
-    window.addEventListener('DOMContentLoaded', startScanner);
-</script>
-
-</body>
-</html>
+            document.getElementById("status").style.
