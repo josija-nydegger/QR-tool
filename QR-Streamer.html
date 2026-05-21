@@ -2,8 +2,9 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Mit Markdown)</title>
+    <title>QR-Code Datenüberträger (Sender - Mit Kompression)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -27,7 +28,6 @@
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
         
-        /* Design für die Modus-Auswahl */
         .mode-selector {
             display: flex;
             gap: 10px;
@@ -65,7 +65,7 @@
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Markdown-Support)</h1>
+    <h1>QR-Streamer (Turbo-Kompression)</h1>
     
     <label>Text-Modus:</label>
     <div class="mode-selector">
@@ -73,8 +73,8 @@
         <button id="btnMarkdown" class="mode-btn" onclick="setMode('MD')">Markdown Text</button>
     </div>
     
-    <textarea id="textInput" placeholder="Schreibe Plaintext oder füge Markdown (z.B. **fett**, # Überschrift) hier ein..." oninput="updateStats()"></textarea>
-    <div id="textStats">0 Wörter, 0 Bytes</div>
+    <textarea id="textInput" placeholder="Schreibe Plaintext oder füge Markdown hier ein..." oninput="updateStats()"></textarea>
+    <div id="textStats">0 Wörter, 0 Bytes (Komprimiert: 0 Bytes)</div>
     
     <div class="controls">
         <div>
@@ -104,7 +104,7 @@
     let animationInterval = null;
     let frames = []; 
     let currentIndex = 0;
-    let currentMode = 'TX'; // Standardmässig Reintext
+    let currentMode = 'TX';
 
     function setMode(mode) {
         currentMode = mode;
@@ -112,13 +112,26 @@
         document.getElementById("btnMarkdown").classList.toggle("active", mode === 'MD');
     }
 
+    // Berechnet live die Ersparnis durch Kompression
     function updateStats() {
         const text = document.getElementById("textInput").value;
         const words = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+        
+        // Originale Grösse
         const bytes = new Blob([text]).size;
         let sizeString = bytes + " Bytes";
         if (bytes >= 1024) sizeString = (bytes / 1024).toFixed(2) + " KB";
-        document.getElementById("textStats").innerText = `${words} Wörter, ${sizeString}`;
+        
+        // Komprimierte Grösse schätzen
+        let compString = "0 Bytes";
+        if (text.length > 0) {
+            const compressed = LZString.compressToEncodedURIComponent(text);
+            const compBytes = new Blob([compressed]).size;
+            compString = compBytes + " Bytes";
+            if (compBytes >= 1024) compString = (compBytes / 1024).toFixed(2) + " KB";
+        }
+        
+        document.getElementById("textStats").innerText = `${words} Wörter, ${sizeString} (Komprimiert: ${compString})`;
     }
 
     function sanitizeText(rawText) {
@@ -146,15 +159,23 @@
         let rawText = document.getElementById("textInput").value;
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
-        document.getElementById("status").innerText = "Berechne Frames... Bitte warten.";
+        document.getElementById("status").innerText = "Komprimiere Daten und berechne Frames...";
         document.getElementById("startBtn").style.display = "none";
         document.getElementById("stopBtn").style.display = "block";
 
         const cleanedText = sanitizeText(rawText);
+        
+        // 1. VOLLSTÄNDIGE KOMPRESSION des Textes vor dem Zerschneiden
+        const compressedText = LZString.compressToEncodedURIComponent(cleanedText);
+        
+        // Protokoll-Modus anpassen: CX = Compressed Text, CM = Compressed Markdown
+        let transmitMode = (currentMode === 'TX') ? 'CX' : 'CM';
+
         const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
         const fps = parseInt(document.getElementById("fps").value);
 
-        const textChunks = chunkText(cleanedText, maxChunkSize);
+        // Wir zerschneiden jetzt den viel kürzeren, komprimierten String!
+        const textChunks = chunkText(compressedText, maxChunkSize);
         const totalChunks = textChunks.length;
 
         frames = []; 
@@ -165,8 +186,8 @@
             const paddedCurrent = String(frameNumber).padStart(3, '0');
             const paddedTotal = String(totalChunks).padStart(3, '0');
             
-            // Protokoll enthält jetzt den Modus: "001/010|MD|Inhalt"
-            const payload = `${paddedCurrent}/${paddedTotal}|${currentMode}|${textChunks[i]}`;
+            // Aufbau: "001/005|CX|HierStehenKomprimierteZeichen"
+            const payload = `${paddedCurrent}/${paddedTotal}|${transmitMode}|${textChunks[i]}`;
             
             qr.value = payload;
             frames.push(qr.toDataURL());
@@ -177,7 +198,7 @@
 
         animationInterval = setInterval(() => {
             document.getElementById("qr-image").src = frames[currentIndex];
-            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz) [Modus: ${currentMode}]`;
+            document.getElementById("status").innerText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz) [Turbo-Modus: ${transmitMode}]`;
             currentIndex = (currentIndex + 1) % totalChunks;
         }, 1000 / fps);
     }
