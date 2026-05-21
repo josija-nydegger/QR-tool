@@ -17,109 +17,155 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            overflow-x: hidden;
         }
         .container {
             max-width: 500px;
             width: 100%;
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
         }
-        h1 { font-size: 20px; margin-top: 0; text-align: center; }
+        h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
         
-        /* --- NEUES SCANNER DESIGN --- */
+        /* --- SCANNER WRAPPER & TRANSITION --- */
         .scanner-wrapper {
             position: relative;
             width: 100%;
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
-            margin-bottom: 15px;
             background: #000;
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Wenn fertig, schrumpft der Scanner elegant zusammen */
+        .scanner-wrapper.minimized {
+            height: 120px !important;
+            opacity: 0.6;
+            margin-bottom: 10px;
         }
         #reader {
             width: 100%;
             border: none;
         }
-        /* Der Neon-Rahmen über dem Kamerabild */
+        
+        /* Neon-Fokus-Rahmen */
         .scan-frame {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 75%;
+            width: 70%;
             aspect-ratio: 1 / 1;
             pointer-events: none;
             z-index: 10;
-            display: none; /* Wird erst eingeblendet, wenn die Kamera läuft */
+            display: none;
+            transition: all 0.3s ease;
+        }
+        .scanner-wrapper.minimized .scan-frame {
+            display: none !important; /* Blendet Rahmen aus, wenn minimiert */
         }
         .scan-corner {
             position: absolute;
-            width: 35px;
-            height: 35px;
-            border-color: #34c759;
+            width: 30px;
+            height: 30px;
+            border-color: #0071e3; /* Edles Apple-Blau statt Grün */
             border-style: solid;
-            box-shadow: 0 0 12px rgba(52, 199, 89, 0.4), inset 0 0 12px rgba(52, 199, 89, 0.4);
+            box-shadow: 0 0 12px rgba(0, 113, 227, 0.3);
         }
-        .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 12px 0 0 0; }
-        .top-right { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 12px 0 0; }
-        .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 12px; }
-        .bottom-right { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 12px 0; }
+        .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
+        .top-right { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 8px 0 0; }
+        .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 8px; }
+        .bottom-right { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
         
-        /* Animierter Laser */
+        /* Pulsierender Laser */
         .scan-laser {
             position: absolute;
             top: 0;
             left: 5%;
             width: 90%;
             height: 2px;
-            background-color: #34c759;
-            box-shadow: 0 0 15px 2px rgba(52, 199, 89, 0.8);
-            animation: scan 2s infinite linear alternate;
+            background-color: #0071e3;
+            box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8);
+            animation: scan 2.5s infinite linear alternate;
         }
         @keyframes scan {
-            0% { top: 5%; }
-            100% { top: 95%; }
+            0% { top: 8%; }
+            100% { top: 92%; }
         }
-        /* --- ENDE SCANNER DESIGN --- */
 
-        .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 6px; margin: 15px 0; height: 12px; overflow: hidden; }
-        .progress-fill { height: 100%; width: 0%; background-color: #34c759; transition: width 0.2s ease; }
-        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin-bottom: 15px; }
+        /* Status & Progress */
+        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 5px 0; transition: all 0.3s; }
+        .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 20px; }
+        .progress-fill { height: 100%; width: 0%; background-color: #0071e3; transition: width 0.15s ease; }
         
-        #result {
+        /* --- NEUE LIVE-ERGEBNIS-KARTE --- */
+        .result-card {
             width: 100%;
-            height: 200px;
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
             box-sizing: border-box;
-            border: 1px solid #d2d2d7;
-            border-radius: 6px;
-            padding: 12px;
-            font-size: 14px;
-            background-color: #fafafa;
-            overflow-y: auto;
+            transform: translateY(40px);
+            opacity: 0;
+            display: none;
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        /* Klasse wird per JS hinzugefügt, wenn Text da ist */
+        .result-card.reveal {
+            display: block;
+            transform: translateY(0);
+            opacity: 1;
+            margin-top: 15px;
         }
         
-        #result h1, #result h2, #result h3 { margin-top: 0; margin-bottom: 8px; color: #000; }
-        #result h1 { font-size: 18px; }
-        #result h2 { font-size: 16px; }
-        #result p { margin: 0 0 8px 0; line-height: 1.4; }
-        #result ul, #result ol { margin: 0 0 10px 0; padding-left: 20px; }
-        #result code { background: #e5e5ea; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+        .card-header {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #86868b;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #f2f2f7;
+            padding-bottom: 6px;
+        }
         
-        .button-group { display: flex; gap: 10px; margin-top: 15px; }
-        button { flex: 1; padding: 12px; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease; }
-        .btn-reset { background-color: #ff3b30; }
-        .btn-copy { background-color: #0071e3; }
+        /* Das gerenderte Inhaltsfeld */
+        #result-content {
+            font-size: 16px;
+            line-height: 1.5;
+            color: #1d1d1f;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        /* Schickes Markdown-Styling im Inneren der Karte */
+        #result-content h1 { font-size: 22px; margin: 0 0 10px 0; color: #000; }
+        #result-content h2 { font-size: 18px; margin: 15px 0 8px 0; color: #000; }
+        #result-content p { margin: 0 0 12px 0; }
+        #result-content ul, #result-content ol { margin: 0 0 15px 0; padding-left: 22px; }
+        #result-content li { margin-bottom: 5px; }
+        #result-content code { background: #f2f2f7; padding: 3px 6px; border-radius: 6px; font-family: monospace; font-size: 14px; }
+        #result-content a { color: #0071e3; text-decoration: none; }
+        #result-content a:hover { text-decoration: underline; }
+        
+        /* Button Bedienleiste am Fussende der Karte */
+        .button-group { display: flex; gap: 12px; margin-top: 20px; }
+        button { flex: 2; padding: 14px; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+        button:active { transform: scale(0.98); }
+        .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
+        .btn-reset { background-color: #f5f5f7; color: #ff3b30; flex: 1; font-weight: 500; }
+        .btn-reset:hover { background-color: #e5e5ea; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>QR-Receiver (Turbo-Decompress)</h1>
+    <h1>QR-Receiver</h1>
     
-    <div class="scanner-wrapper">
+    <div class="scanner-wrapper" id="scannerContainer">
         <div id="reader"></div>
         <div id="scanFrame" class="scan-frame">
             <div class="scan-corner top-left"></div>
@@ -129,157 +175,3 @@
             <div class="scan-laser" id="scanLaser"></div>
         </div>
     </div>
-    
-    <div id="status">Warte auf Kamera-Freigabe...</div>
-    
-    <div class="progress-bar">
-        <div id="progress" class="progress-fill"></div>
-    </div>
-    
-    <label style="font-weight:600; font-size:14px;" id="outputLabel">Empfangener Inhalt:</label>
-    <div id="result"></div>
-    
-    <div class="button-group">
-        <button class="btn-copy" id="copyBtn" onclick="copyText()">Text kopieren</button>
-        <button class="btn-reset" onclick="resetScanner()">Zurücksetzen</button>
-    </div>
-</div>
-
-<script>
-    let receivedChunks = {};
-    let totalChunksCount = 0;
-    let html5QrcodeScanner = null;
-    let streamMode = 'TX'; 
-    let rawAssembledText = ""; 
-
-    function startScanner() {
-        html5QrcodeScanner = new Html5Qrcode("reader");
-        const config = { 
-            fps: 30, 
-            // qrbox exakt auf 75% stellen, damit es perfekt in unseren Neon-Rahmen passt
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                return { width: viewfinderWidth * 0.75, height: viewfinderWidth * 0.75 };
-            }
-        };
-
-        html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
-        .then(() => {
-            document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
-            // Rahmen und Laser einblenden, sobald die Kamera läuft
-            document.getElementById("scanFrame").style.display = "block";
-        }).catch(err => {
-            document.getElementById("status").innerText = "Kamerafehler: " + err;
-        });
-    }
-
-    function onScanSuccess(decodedText) {
-        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
-        
-        if (!protocolMatch) return; 
-
-        const currentFrame = parseInt(protocolMatch[1]);
-        const totalFrames = parseInt(protocolMatch[2]);
-        const frameMode = protocolMatch[3];
-        const payload = protocolMatch[4];
-
-        if (totalChunksCount !== totalFrames) {
-            totalChunksCount = totalFrames;
-            receivedChunks = {};
-            streamMode = frameMode; 
-        }
-
-        if (!receivedChunks[currentFrame]) {
-            receivedChunks[currentFrame] = payload;
-            
-            const receivedCount = Object.keys(receivedChunks).length;
-            const progressPercent = (receivedCount / totalFrames) * 100;
-            document.getElementById("progress").style.width = progressPercent + "%";
-            
-            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen (${streamMode})`;
-
-            if (receivedCount === totalFrames) {
-                assembleText();
-            }
-        }
-    }
-
-    function assembleText() {
-        // Laser ausblenden, wenn die Übertragung fertig ist
-        document.getElementById("scanLaser").style.display = "none";
-
-        let fullAssembledString = "";
-        for (let i = 1; i <= totalChunksCount; i++) {
-            fullAssembledString += receivedChunks[i];
-        }
-        
-        let finalDecodedText = fullAssembledString;
-
-        if (streamMode === 'CX' || streamMode === 'CM') {
-            try {
-                document.getElementById("status").innerText = "Entpacke Daten...";
-                finalDecodedText = LZString.decompressFromEncodedURIComponent(fullAssembledString);
-            } catch (e) {
-                console.error("Dekompressionsfehler:", e);
-                document.getElementById("status").innerText = "❌ Fehler beim Entpacken der Daten!";
-                return;
-            }
-        }
-        
-        rawAssembledText = finalDecodedText; 
-        const resultContainer = document.getElementById("result");
-        
-        if (streamMode === 'MD' || streamMode === 'CM') {
-            resultContainer.innerHTML = marked.parse(finalDecodedText);
-            document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Markdown gerendert):";
-        } else {
-            resultContainer.innerText = finalDecodedText;
-            document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Reintext):";
-        }
-        
-        document.getElementById("status").innerText = "🎉 Übertragung vollständig & entpackt!";
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    }
-
-    function resetScanner() {
-        receivedChunks = {};
-        totalChunksCount = 0;
-        rawAssembledText = "";
-        document.getElementById("progress").style.width = "0%";
-        document.getElementById("result").innerHTML = "";
-        document.getElementById("outputLabel").innerText = "Empfangener Inhalt:";
-        document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
-        
-        // Laser wieder aktivieren
-        document.getElementById("scanLaser").style.display = "block";
-        
-        const copyBtn = document.getElementById("copyBtn");
-        copyBtn.innerText = "Text kopieren";
-        copyBtn.style.backgroundColor = "#0071e3";
-    }
-
-    function copyText() {
-        if (!rawAssembledText) {
-            alert("Es gibt noch keinen Text zum Kopieren!");
-            return;
-        }
-
-        navigator.clipboard.writeText(rawAssembledText).then(() => {
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Kopiert! ✓";
-            copyBtn.style.backgroundColor = "#34c759";
-            if (navigator.vibrate) navigator.vibrate(50);
-
-            setTimeout(() => {
-                copyBtn.innerText = "Text kopieren";
-                copyBtn.style.backgroundColor = "#0071e3";
-            }, 2000);
-        }).catch(err => {
-            alert("Kopieren fehlgeschlagen: " + err);
-        });
-    }
-
-    window.addEventListener('DOMContentLoaded', startScanner);
-</script>
-
-</body>
-</html>
