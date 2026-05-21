@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR-Code Datenüberträger (Empfänger)</title>
+    <!-- Nutzt eine performante, mobile-optimierte QR-Scanner Bibliothek -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            padding: 15px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            box-sizing: border-box;
+        }
+        h1 { font-size: 20px; margin-top: 0; text-align: center; }
+        #reader {
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #e5e5ea;
+            border-radius: 6px;
+            margin: 15px 0;
+            height: 12px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #34c759;
+            transition: width 0.2s ease;
+        }
+        #status {
+            font-weight: 600;
+            font-size: 14px;
+            color: #86868b;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        #result {
+            width: 100%;
+            height: 150px;
+            box-sizing: border-box;
+            border: 1px solid #d2d2d7;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 14px;
+            background-color: #fafafa;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #ff3b30;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>QR-Receiver (Daten-Empfänger)</h1>
+    
+    <!-- Das Kamera-Fenster -->
+    <div id="reader"></div>
+    
+    <div id="status">Warte auf Kamera-Freigabe...</div>
+    
+    <!-- Fortschrittsanzeige -->
+    <div class="progress-bar">
+        <div id="progress" class="progress-fill"></div>
+    </div>
+    
+    <label style="font-weight:600; font-size:14px;">Empfangener Text:</label>
+    <div id="result" style="overflow-y: auto; white-space: pre-wrap;"></div>
+    
+    <button onclick="resetScanner()">Zurücksetzen</button>
+</div>
+
+<script>
+    let receivedChunks = {};
+    let totalChunksCount = 0;
+    let html5QrcodeScanner = null;
+
+    function startScanner() {
+        // Konfiguration für maximale Performance auf dem Smartphone
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        
+        const config = { 
+            fps: 30, // Scannt 30 Mal pro Sekunde das Kamerabild
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                return { width: viewfinderWidth * 0.8, height: viewfinderWidth * 0.8 };
+            }
+        };
+
+        // Kamera starten (Nutzt die Rückkamera "environment")
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, 
+            config, 
+            onScanSuccess
+        ).then(() => {
+            document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
+        }).catch(err => {
+            document.getElementById("status").innerText = "Kamerafehler: " + err;
+        });
+    }
+
+    function onScanSuccess(decodedText) {
+        // Prüfen, ob der Code unserem Protokoll entspricht (z.B. "001/010|Inhalt")
+        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([\s\S]*)$/);
+        
+        if (!protocolMatch) {
+            // Ignoriere QR-Codes, die nicht zu unserem Stream gehören
+            return; 
+        }
+
+        const currentFrame = parseInt(protocolMatch[1]);
+        const totalFrames = parseInt(protocolMatch[2]);
+        const payload = protocolMatch[3];
+
+        // Falls wir einen neuen Stream starten, alten Speicher löschen
+        if (totalChunksCount !== totalFrames) {
+            totalChunksCount = totalFrames;
+            receivedChunks = {};
+        }
+
+        // Frame speichern, falls wir ihn noch nicht haben
+        if (!receivedChunks[currentFrame]) {
+            receivedChunks[currentFrame] = payload;
+            
+            // Fortschritt berechnen
+            const receivedCount = Object.keys(receivedChunks).length;
+            const progressPercent = (receivedCount / totalFrames) * 100;
+            document.getElementById("progress").style.width = progressPercent + "%";
+            
+            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen geladen`;
+
+            // Wenn alle Teile da sind, Text zusammensetzen
+            if (receivedCount === totalFrames) {
+                assembleText();
+            }
+        }
+    }
+
+    function assembleText() {
+        let fullText = "";
+        for (let i = 1; i <= totalChunksCount; i++) {
+            fullText += receivedChunks[i];
+        }
+        
+        document.getElementById("result").innerText = fullText;
+        document.getElementById("status").innerText = "🎉 Übertragung vollständig!";
+        
+        // Vibration als haptisches Feedback, falls vom Handy unterstützt
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+
+    function resetScanner() {
+        receivedChunks = {};
+        totalChunksCount = 0;
+        document.getElementById("progress").style.width = "0%";
+        document.getElementById("result").innerText = "";
+        document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
+    }
+
+    // Automatisch beim Laden starten
+    window.addEventListener('DOMContentLoaded', startScanner);
+</script>
+
+</body>
+</html>

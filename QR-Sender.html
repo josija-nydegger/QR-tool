@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>QR-Code Datenüberträger (Sender)</title>
+    <!-- Nutzt die stabile qrcode.js Bibliothek über ein zuverlässiges CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px;
+            margin: 0;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h1 { font-size: 24px; margin-top: 0; text-align: center; }
+        label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
+        textarea { width: 100%; height: 120px; box-sizing: border-box; border: 1px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        select, input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
+        button { width: 100%; margin-top: 20px; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .btn-start { background-color: #0071e3; color: white; }
+        .btn-start:hover { background-color: #0077ed; }
+        .btn-stop { background-color: #ff3b30; color: white; display: none; }
+        .btn-stop:hover { background-color: #ff453a; }
+        #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; }
+        #qrcode { padding: 20px; background: white; border: 1px solid #d2d2d7; border-radius: 8px; display: inline-block; min-height: 256px; min-width: 256px; }
+        #status { margin-top: 10px; font-weight: 600; font-size: 14px; color: #86868b; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>QR-Streamer (Daten-Sender)</h1>
+    
+    <label for="textInput">Zu übertragender Text:</label>
+    <textarea id="textInput" placeholder="Gib hier den Text ein, der per QR-Code-Stream übertragen werden soll..."></textarea>
+    
+    <div class="controls">
+        <div>
+            <label for="chunkSize">QR-Version / Kapazität:</label>
+            <select id="chunkSize">
+                <option value="150" selected>Version 10 (~150 Zeichen inkl. Header - Sehr robust)</option>
+                <option value="500">Version 20 (~500 Zeichen - Medium)</option>
+                <option value="1500">Version 40 (~1500 Zeichen - Benötigt perfekten Fokus)</option>
+            </select>
+        </div>
+        <div>
+            <label for="fps">Geschwindigkeit (Frames / Sek):</label>
+            <input type="number" id="fps" value="5" min="1" max="30">
+        </div>
+    </div>
+    
+    <button id="startBtn" class="btn-start" onclick="startStreaming()">Stream starten</button>
+    <button id="stopBtn" class="btn-stop" onclick="stopStreaming()">Stream stoppen</button>
+</div>
+
+<div id="visualizer">
+    <div id="qrcode"></div>
+    <div id="status">Bereit zum Senden</div>
+</div>
+
+<script>
+    let animationInterval = null;
+    let qrContainer = document.getElementById("qrcode");
+    let qr = new QRCode(qrContainer, { width: 256, height: 256, correctLevel: QRCode.CorrectLevel.L });
+
+    function chunkText(text, size) {
+        const chunks = [];
+        for (let i = 0; i < text.length; i += size) {
+            chunks.push(text.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    function startStreaming() {
+        const text = document.getElementById("textInput").value;
+        if (!text) {
+            alert("Bitte gib zuerst einen Text ein.");
+            return;
+        }
+
+        const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
+        const fps = parseInt(document.getElementById("fps").value);
+        const intervalMs = 1000 / fps;
+
+        // Text aufteilen
+        const textChunks = chunkText(text, maxChunkSize);
+        const totalChunks = textChunks.length;
+        let currentIndex = 0;
+
+        // UI umschalten
+        document.getElementById("startBtn").style.display = "none";
+        document.getElementById("stopBtn").style.display = "block";
+
+        // Intervall für die Animation starten
+        animationInterval = setInterval(() => {
+            const currentChunk = textChunks[currentIndex];
+            const frameNumber = currentIndex + 1;
+            
+            // Protokoll-Header: "001/010|" sorgt dafür, dass das Handy die Reihenfolge kennt
+            const paddedCurrent = String(frameNumber).padStart(3, '0');
+            const paddedTotal = String(totalChunks).padStart(3, '0');
+            const payload = `${paddedCurrent}/${paddedTotal}|${currentChunk}`;
+
+            // QR-Code aktualisieren
+            qr.clear();
+            qr.makeCode(payload);
+
+            // Status-Text aktualisieren
+            document.getElementById("status").innerText = `Sende Frame ${frameNumber} von ${totalChunks} (${fps} Hz)`;
+
+            // Index weiterschalten (Endlosschleife)
+            currentIndex = (currentIndex + 1) % totalChunks;
+        }, intervalMs);
+    }
+
+    function stopStreaming() {
+        if (animationInterval) {
+            clearInterval(animationInterval);
+        }
+        document.getElementById("startBtn").style.display = "block";
+        document.getElementById("stopBtn").style.display = "none";
+        document.getElementById("status").innerText = "Stream gestoppt";
+    }
+</script>
+
+</body>
+</html>
