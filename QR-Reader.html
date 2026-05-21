@@ -191,3 +191,128 @@
                     <p class="crypto-error" id="decryptError">Falscher PIN! Zugriff verweigert.</p>
                 </div>
             `;
+            
+            const card = document.getElementById("resultCard");
+            card.style.display = "block";
+            setTimeout(() => { card.classList.add("reveal"); }, 50);
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        } else {
+            processDecryptedData(fullAssembledString);
+        }
+    }
+
+    function attemptDecryption() {
+        const pin = document.getElementById("receiverPin").value;
+        try {
+            const bytes = CryptoJS.AES.decrypt(encryptedPayloadBase64, pin);
+            const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+            if (!decryptedString) throw new Error("Falscher PIN");
+            
+            document.getElementById("cardButtons").style.display = "flex";
+            processDecryptedData(decryptedString);
+        } catch (e) {
+            document.getElementById("decryptError").style.display = "block";
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        }
+    }
+
+    function processDecryptedData(payloadString) {
+        let finalDecodedText = payloadString;
+
+        if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
+            try {
+                finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
+            } catch (e) {
+                document.getElementById("status").style.display = "block";
+                document.getElementById("status").innerText = "❌ Fehler bei der Dekompression!";
+                return;
+            }
+        }
+        
+        rawAssembledText = finalDecodedText; 
+        const contentArea = document.getElementById("result-content");
+        const headerArea = document.getElementById("cardTypeHeader");
+        
+        if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
+            contentArea.innerHTML = marked.parse(finalDecodedText);
+            headerArea.innerText = "📝 Empfang: Markdown Dokument";
+        } else {
+            contentArea.innerText = finalDecodedText;
+            headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
+        }
+
+        renderMathInElement(contentArea, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false}
+            ],
+            throwOnError: false
+        });
+        
+        if (streamMode === 'TX' || streamMode === 'MD' || streamMode === 'CX' || streamMode === 'CM') {
+            const card = document.getElementById("resultCard");
+            card.style.display = "block";
+            setTimeout(() => { card.classList.add("reveal"); }, 50);
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        }
+    }
+
+    function resetScanner() {
+        const card = document.getElementById("resultCard");
+        card.classList.remove("reveal");
+        
+        setTimeout(() => {
+            card.style.display = "none";
+            document.getElementById("scannerContainer").classList.remove("minimized");
+            document.getElementById("progressContainer").style.display = "block";
+            document.getElementById("status").style.display = "block";
+            document.getElementById("scanLaser").style.display = "block";
+            document.getElementById("cardButtons").style.display = "flex";
+            
+            receivedChunks = {};
+            totalChunksCount = 0;
+            rawAssembledText = "";
+            encryptedPayloadBase64 = "";
+            
+            document.getElementById("progress").style.width = "0%";
+            document.getElementById("result-content").innerHTML = "";
+            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
+            
+            const copyBtn = document.getElementById("copyBtn");
+            copyBtn.innerText = "Kopieren 📋";
+            copyBtn.style.backgroundColor = "#0071e3";
+        }, 400);
+    }
+
+    function copyText() {
+        if (!rawAssembledText) return;
+        navigator.clipboard.writeText(rawAssembledText).then(() => {
+            const copyBtn = document.getElementById("copyBtn");
+            copyBtn.innerText = "Gesichert! ✓";
+            copyBtn.style.backgroundColor = "#34c759";
+            if (navigator.vibrate) navigator.vibrate(50);
+            setTimeout(() => {
+                copyBtn.innerText = "Kopieren 📋";
+                copyBtn.style.backgroundColor = "#0071e3";
+            }, 2000);
+        });
+    }
+
+    // --- NEU: Logik für den nativen Teilen-Button ---
+    function shareText() {
+        if (!rawAssembledText || !navigator.share) return;
+        
+        navigator.share({
+            title: 'Sicherer Datenempfang (QR)',
+            text: rawAssembledText
+        }).catch((error) => {
+            // Fängt den Fehler ab, falls der User das Teilen-Menü abbricht (ohne App-Crash)
+            console.log('Teilen abgebrochen oder fehlerhaft', error);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', startScanner);
+</script>
+
+</body>
+</html>
