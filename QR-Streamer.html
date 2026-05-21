@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Optimiert)</title>
+    <title>QR-Code Datenüberträger (Sender - Fehlerfrei)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body {
@@ -42,15 +42,15 @@
     <h1>QR-Streamer (Daten-Sender)</h1>
     
     <label for="textInput">Zu übertragender Text:</label>
-    <textarea id="textInput" placeholder="Gib hier den Text ein..."></textarea>
+    <textarea id="textInput" placeholder="Kopiere hier deinen Text hinein..."></textarea>
     
     <div class="controls">
         <div>
-            <label for="chunkSize">Paketgrösse (Sicherheits-Modus):</label>
+            <label for="chunkSize">Paketgrösse:</label>
             <select id="chunkSize">
-                <option value="100" selected>100 Zeichen (Sehr robust, viele Frames)</option>
+                <option value="100" selected>100 Zeichen (Sehr robust)</option>
                 <option value="300">300 Zeichen (Standard)</option>
-                <option value="800">800 Zeichen (Schneller, erfordert guten Fokus)</option>
+                <option value="800">800 Zeichen (Schnell)</option>
             </select>
         </div>
         <div>
@@ -72,6 +72,15 @@
     let animationInterval = null;
     const qrContainer = document.getElementById("qrcode");
 
+    // Diese Funktion reinigt den kopierten Text von unsichtbarem Datenmüll
+    function sanitizeText(rawText) {
+        return rawText
+            .replace(/\r\n/g, "\n")      // Vereinheitlicht Windows-Zeilenumbrüche zu Standard-Linux
+            .replace(/\r/g, "\n")        // Vereinheitlicht alte Mac-Zeilenumbrüche
+            .replace(/[\u200B-\u200D\uFEFF]/g, "") // Löscht unsichtbare Trennzeichen (Zero-Width Spaces)
+            .replace(/\u00A0/g, " ");    // Ersetzt geschützte Leerzeichen durch normale Leerzeichen
+    }
+
     function chunkText(text, size) {
         const chunks = [];
         for (let i = 0; i < text.length; i += size) {
@@ -81,21 +90,23 @@
     }
 
     function startStreaming() {
-        const text = document.getElementById("textInput").value;
-        if (!text) return alert("Bitte gib zuerst einen Text ein.");
+        let rawText = document.getElementById("textInput").value;
+        if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
+
+        // Text vor der Verarbeitung säubern
+        const cleanedText = sanitizeText(rawText);
 
         const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
         const fps = parseInt(document.getElementById("fps").value);
         const intervalMs = 1000 / fps;
 
-        const textChunks = chunkText(text, maxChunkSize);
+        const textChunks = chunkText(cleanedText, maxChunkSize);
         const totalChunks = textChunks.length;
         let currentIndex = 0;
 
         document.getElementById("startBtn").style.display = "none";
         document.getElementById("stopBtn").style.display = "block";
 
-        // Altes Intervall zur Sicherheit löschen
         if (animationInterval) clearInterval(animationInterval);
 
         animationInterval = setInterval(() => {
@@ -106,19 +117,23 @@
             const paddedTotal = String(totalChunks).padStart(3, '0');
             const payload = `${paddedCurrent}/${paddedTotal}|${currentChunk}`;
 
-            // DOM-Inhalt komplett löschen – das zwingt den Browser, den Speicher freizugeben
             qrContainer.innerHTML = "";
             
-            // Neuen QR-Code frisch instanziieren (behebt den Hänger in der Bibliothek)
-            new QRCode(qrContainer, {
-                text: payload,
-                width: 256,
-                height: 256,
-                correctLevel: QRCode.CorrectLevel.L
-            });
-
-            document.getElementById("status").innerText = `Sende Frame ${frameNumber} von ${totalChunks} (${fps} Hz)`;
-            currentIndex = (currentIndex + 1) % totalChunks;
+            try {
+                new QRCode(qrContainer, {
+                    text: payload,
+                    width: 256,
+                    height: 256,
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+                document.getElementById("status").innerText = `Sende Frame ${frameNumber} von ${totalChunks} (${fps} Hz)`;
+                currentIndex = (currentIndex + 1) % totalChunks;
+            } catch (e) {
+                // Falls doch noch ein Zeichen quersteht, fangen wir den Fehler ab, damit der Browser nicht abstürzt
+                console.error("QR-Fehler bei Frame:", frameNumber, e);
+                document.getElementById("status").innerText = `Fehler in Frame ${frameNumber}. Überspringe...`;
+                currentIndex = (currentIndex + 1) % totalChunks;
+            }
         }, intervalMs);
     }
 
