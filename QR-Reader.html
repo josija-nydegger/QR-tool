@@ -28,7 +28,63 @@
             box-sizing: border-box;
         }
         h1 { font-size: 20px; margin-top: 0; text-align: center; }
-        #reader { width: 100%; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+        
+        /* --- NEUES SCANNER DESIGN --- */
+        .scanner-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            background: #000;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        #reader {
+            width: 100%;
+            border: none;
+        }
+        /* Der Neon-Rahmen über dem Kamerabild */
+        .scan-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 75%;
+            aspect-ratio: 1 / 1;
+            pointer-events: none;
+            z-index: 10;
+            display: none; /* Wird erst eingeblendet, wenn die Kamera läuft */
+        }
+        .scan-corner {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border-color: #34c759;
+            border-style: solid;
+            box-shadow: 0 0 12px rgba(52, 199, 89, 0.4), inset 0 0 12px rgba(52, 199, 89, 0.4);
+        }
+        .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 12px 0 0 0; }
+        .top-right { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 12px 0 0; }
+        .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 12px; }
+        .bottom-right { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 12px 0; }
+        
+        /* Animierter Laser */
+        .scan-laser {
+            position: absolute;
+            top: 0;
+            left: 5%;
+            width: 90%;
+            height: 2px;
+            background-color: #34c759;
+            box-shadow: 0 0 15px 2px rgba(52, 199, 89, 0.8);
+            animation: scan 2s infinite linear alternate;
+        }
+        @keyframes scan {
+            0% { top: 5%; }
+            100% { top: 95%; }
+        }
+        /* --- ENDE SCANNER DESIGN --- */
+
         .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 6px; margin: 15px 0; height: 12px; overflow: hidden; }
         .progress-fill { height: 100%; width: 0%; background-color: #34c759; transition: width 0.2s ease; }
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin-bottom: 15px; }
@@ -45,7 +101,6 @@
             overflow-y: auto;
         }
         
-        /* Markdown In-App Styling */
         #result h1, #result h2, #result h3 { margin-top: 0; margin-bottom: 8px; color: #000; }
         #result h1 { font-size: 18px; }
         #result h2 { font-size: 16px; }
@@ -64,7 +119,16 @@
 <div class="container">
     <h1>QR-Receiver (Turbo-Decompress)</h1>
     
-    <div id="reader"></div>
+    <div class="scanner-wrapper">
+        <div id="reader"></div>
+        <div id="scanFrame" class="scan-frame">
+            <div class="scan-corner top-left"></div>
+            <div class="scan-corner top-right"></div>
+            <div class="scan-corner bottom-left"></div>
+            <div class="scan-corner bottom-right"></div>
+            <div class="scan-laser" id="scanLaser"></div>
+        </div>
+    </div>
     
     <div id="status">Warte auf Kamera-Freigabe...</div>
     
@@ -86,20 +150,23 @@
     let totalChunksCount = 0;
     let html5QrcodeScanner = null;
     let streamMode = 'TX'; 
-    let rawAssembledText = ""; // Speichert den entpackten Klartext für die Zwischenablage
+    let rawAssembledText = ""; 
 
     function startScanner() {
         html5QrcodeScanner = new Html5Qrcode("reader");
         const config = { 
             fps: 30, 
+            // qrbox exakt auf 75% stellen, damit es perfekt in unseren Neon-Rahmen passt
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                return { width: viewfinderWidth * 0.8, height: viewfinderWidth * 0.8 };
+                return { width: viewfinderWidth * 0.75, height: viewfinderWidth * 0.75 };
             }
         };
 
         html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
         .then(() => {
             document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
+            // Rahmen und Laser einblenden, sobald die Kamera läuft
+            document.getElementById("scanFrame").style.display = "block";
         }).catch(err => {
             document.getElementById("status").innerText = "Kamerafehler: " + err;
         });
@@ -137,6 +204,9 @@
     }
 
     function assembleText() {
+        // Laser ausblenden, wenn die Übertragung fertig ist
+        document.getElementById("scanLaser").style.display = "none";
+
         let fullAssembledString = "";
         for (let i = 1; i <= totalChunksCount; i++) {
             fullAssembledString += receivedChunks[i];
@@ -144,7 +214,6 @@
         
         let finalDecodedText = fullAssembledString;
 
-        // 2. ABSCHLIESSENDE DEKOMPRESSION, falls die Flags CX oder CM gesetzt sind
         if (streamMode === 'CX' || streamMode === 'CM') {
             try {
                 document.getElementById("status").innerText = "Entpacke Daten...";
@@ -156,10 +225,9 @@
             }
         }
         
-        rawAssembledText = finalDecodedText; // Speicher den echten Text zum Kopieren
+        rawAssembledText = finalDecodedText; 
         const resultContainer = document.getElementById("result");
         
-        // Prüfen, ob der Stream urspünglich ein Markdown-Stream (MD oder CM) war
         if (streamMode === 'MD' || streamMode === 'CM') {
             resultContainer.innerHTML = marked.parse(finalDecodedText);
             document.getElementById("outputLabel").innerText = "Empfangener Inhalt (Markdown gerendert):";
@@ -181,6 +249,9 @@
         document.getElementById("outputLabel").innerText = "Empfangener Inhalt:";
         document.getElementById("status").innerText = "Scanne... Bitte auf den QR-Stream richten.";
         
+        // Laser wieder aktivieren
+        document.getElementById("scanLaser").style.display = "block";
+        
         const copyBtn = document.getElementById("copyBtn");
         copyBtn.innerText = "Text kopieren";
         copyBtn.style.backgroundColor = "#0071e3";
@@ -192,7 +263,6 @@
             return;
         }
 
-        // Kopiert den sauberen, entpackten Text (inkl. rohen Markdown-Formatierungen)
         navigator.clipboard.writeText(rawAssembledText).then(() => {
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopiert! ✓";
