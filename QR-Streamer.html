@@ -18,10 +18,12 @@
 
         textarea { width: 100%; height: 140px; box-sizing: border-box; border: 1px solid #d2d2d7; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; }
         
-        /* Neues Design für das PIN-Feld */
+        /* PIN-Container mit Checkbox */
         .pin-container { margin-top: 15px; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; }
         .pin-container label { margin-top: 0; color: #1d1d1f; }
-        input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; }
+        input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; margin-bottom: 10px; }
+        .remember-pin-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #86868b; cursor: pointer; margin: 0; }
+        .remember-pin-label input { width: 16px; height: 16px; cursor: pointer; }
 
         #textStats { text-align: right; font-size: 13px; color: #86868b; margin-top: 5px; font-weight: 500; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
@@ -52,6 +54,11 @@
     <div class="pin-container">
         <label for="pinInput">🔒 Verschlüsselung (Optional):</label>
         <input type="password" id="pinInput" placeholder="Geheimer PIN (z.B. 1234)">
+        
+        <label class="remember-pin-label">
+            <input type="checkbox" id="rememberPin">
+            PIN für diese Sitzung merken
+        </label>
     </div>
     
     <div class="controls">
@@ -120,36 +127,33 @@
     function startStreaming() {
         let rawText = document.getElementById("textInput").value;
         let pin = document.getElementById("pinInput").value;
+        let shouldRemember = document.getElementById("rememberPin").checked;
         
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
-        // SICHERHEIT: Löscht den PIN augenblicklich aus dem Eingabefeld!
-        document.getElementById("pinInput").value = "";
+        // NEU: PIN nur löschen, wenn "Sitzung merken" NICHT aktiv ist
+        if (!shouldRemember) {
+            document.getElementById("pinInput").value = "";
+        }
 
         document.getElementById("status").innerText = "Verarbeite Daten und berechne Frames...";
         document.getElementById("startBtn").style.display = "none";
         document.getElementById("stopBtn").style.display = "block";
 
         const cleanedText = sanitizeText(rawText);
-        
-        // 1. Zuerst die maximale Kompression anwenden
         const compressedText = LZString.compressToEncodedURIComponent(cleanedText);
         
-        let transmitMode = (currentMode === 'TX') ? 'CX' : 'CM'; // Standard: Compressed Text/Markdown
+        let transmitMode = (currentMode === 'TX') ? 'CX' : 'CM'; 
         let finalPayloadText = compressedText;
 
-        // 2. AES-256 Verschlüsselung, falls ein PIN eingegeben wurde
         if (pin.trim() !== "") {
-            // CryptoJS generiert einen sicheren Base64-String aus den komprimierten Daten
             finalPayloadText = CryptoJS.AES.encrypt(compressedText, pin).toString();
-            // Die Modi EX (Encrypted Text) und EM (Encrypted Markdown) signalisieren dem Empfänger die Verschlüsselung
             transmitMode = (currentMode === 'TX') ? 'EX' : 'EM'; 
         }
 
         const maxChunkSize = parseInt(document.getElementById("chunkSize").value);
         const fps = parseInt(document.getElementById("fps").value);
 
-        // Wir zerschneiden jetzt die fertige Payload (Komprimiert oder Komprimiert+Verschlüsselt)
         const textChunks = chunkText(finalPayloadText, maxChunkSize);
         const totalChunks = textChunks.length;
 
@@ -173,7 +177,7 @@
             document.getElementById("qr-image").src = frames[currentIndex];
             let statusText = `Sende Frame ${currentIndex + 1} von ${totalChunks} (${fps} Hz) [Modus: ${transmitMode}]`;
             if (transmitMode === 'EX' || transmitMode === 'EM') {
-                statusText += " 🔒"; // Visuelles Feedback für Verschlüsselung
+                statusText += " 🔒"; 
             }
             document.getElementById("status").innerText = statusText;
             currentIndex = (currentIndex + 1) % totalChunks;
