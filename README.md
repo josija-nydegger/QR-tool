@@ -30,14 +30,27 @@ Das Tool besteht aus zwei simplen, schlanken HTML-Dateien:
 
 ### 1. `QR-Streamer.html` (Der Sender)
 Diese Datei wird lokal auf dem Computer (z. B. Mac) ausgeführt.
-* **Funktion:** Sie nimmt einen beliebigen Text auf, filtert automatisch störende Formatierungen oder kritische UTF-8-Sonderzeichen heraus und zerlegt den Text in mathematisch exakte Häppchen.
+* **Modus-Auswahl:** Unterstützt wahlweise reinen Text (`Raw Text`) oder formatiertes `Markdown`.
+* **Turbo-Kompression:** Nutzt die `lz-string`-Bibliothek, um Texte vor dem Senden im Hintergrund radikal zu komprimieren. Das spart bis zu 50 % der Datenmenge ein und halbiert die nötige Frame-Anzahl.
 * **Pre-Rendering:** Um Abstürze im Browser zu verhindern, berechnet der Streamer alle QR-Codes als starre Bilder im Voraus (Filmrolle), bevor der Stream startet. Beim Abspielen werden nur noch die fertigen Bilder mit der gewünschten Hertz-Zahl (FPS) ausgetauscht.
 
 ### 2. `QR-Reader.html` (Der Empfänger)
 Diese Datei wird auf dem Smartphone ausgeführt und über GitHub Pages unter der oben genannten HTTPS-Adresse bereitgestellt.
-* **Funktion:** Sie greift auf die Handykamera zu und analysiert den Videostream in Echtzeit mit 30 FPS.
-* **Protokoll-Header:** Jedes empfangene Paket enthält einen unsichtbaren Header (z. B. `001/010|...`). Der Reader erkennt dadurch die Reihenfolge, baut den Text wie ein Puzzle zusammen und signalisiert den Erfolg per Vibration.
-* **Clipboard-Integration:** Über einen dedizierten Button kann der empfangene Text direkt in die iOS/Android-Zwischenablage kopiert werden.
+* **Echtzeit-Dekodierung:** Greift auf die Handykamera zu und analysiert den Videostream mit 30 FPS.
+* **Auto-Decompress:** Erkennt komprimierte Datenströme vollautomatisch und entpackt sie blitzschnell nach dem Empfang.
+* **Markdown-Parser:** Integriert `marked.js`, um übertragenen Markdown-Code (Überschriften, Listen, fette Texte, Links) direkt visuell ansprechend auf dem Smartphone-Bildschirm zu rendern.
+* **Clipboard-Integration:** Über den Button "Text kopieren" wird der saubere, dekomprimierte Rohtext (inklusive der Markdown-Formatstempel) direkt in die iOS/Android-Zwischenablage kopiert, um ihn in anderen Apps weiterzuverwenden.
+
+---
+
+## 📋 Übertragungsprotokoll (Header)
+
+Jedes Datenpaket wird mit einem intelligenten, dreiteiligen Header versehen, den der Empfänger automatisch ausliest:
+`[Aktueller Frame]/[Gesamt-Frames]|[Modus-Flag]|[Datenpaket]`
+
+**Beispiel:** `001/005|CM|KompakterZahlensalat...`
+* `001/005`: Frame 1 von insgesamt 5 Paketen.
+* `CM`: Modus-Flag für **C**ompressed **M**arkdown (weitere Modi: `CX` für Compressed Text, `TX` für Raw Text, `MD` für Uncompressed Markdown).
 
 ---
 
@@ -59,16 +72,10 @@ Da Smartphones den Kamerazugriff im Browser aus Datenschutzgründen nur über ge
 
 ## 📖 Bedienungsanleitung für einen Testlauf
 
-1. Öffne den **QR-Streamer** auf dem PC und füge einen beliebig langen Text in das Textfeld ein.
-2. Stelle die **Paketgrösse** auf `Gross (300 Zeichen)` und die **Geschwindigkeit** auf `10` (FPS).
-3. Rufe auf dem Smartphone den oben bereitgestellten **Link** auf und erlaube den Kamerazugriff.
-4. Klicke am PC auf **Stream starten** (der Streamer berechnet kurz die Frames und startet dann die Sequenz).
-5. Richte die Handykamera so auf den Bildschirm, dass der QR-Code gut im quadratischen Sucherfenster zu sehen ist.
-6. Der grüne Fortschrittsbalken füllt sich. Sobald alle Frames einmal erfasst wurden, ploppt der Text auf.
-7. Klicke auf **Text kopieren**, um den Inhalt direkt in der Zwischenablage deines Handys zu sichern.
-
----
-
-## 🔒 Sicherheitsmerkmale
-* **Echte Einbahnstrasse:** Es existiert kein Rückkanal vom Smartphone zum Computer. Ein infiziertes Smartphone kann den sendenden Computer niemals infizieren.
-* **Automatisches Sanitizing:** Der Sender bügelt komplexe Zeichen glatt, um sicherzustellen, dass die QR-Bibliothek niemals aufgrund von Zeichensatz-Fehlern einfriert.
+1. Öffne den **QR-Streamer** auf dem PC, wähle den gewünschten Modus (Raw Text oder Markdown) und füge deinen Text ein.
+2. Stelle die **Paketgrösse** auf `Gross (300 Zeichen - Sweet Spot)` und die **Geschwindigkeit** auf `10` (FPS).
+3. Die Live-Statistik zeigt dir sofort die originale Byte-Grösse sowie die reale Dateneinsparung durch die Kompression an.
+4. Rufe auf dem Smartphone den oben bereitgestellten **Link** auf und erlaube den Kamerazugriff.
+5. Klicke am PC auf **Stream starten** (der Streamer berechnet kurz die Bilder vor und startet dann die Sequenz).
+6. Richte die Handykamera so auf den Bildschirm, dass der grosse QR-Code gut im quadratischen Sucherfenster zu sehen ist.
+7.
