@@ -34,11 +34,39 @@
         .scan-laser { position: absolute; top: 0; left: 5%; width: 90%; height: 2px; background-color: #0071e3; box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8); animation: scan 2.5s infinite linear alternate; }
         @keyframes scan { 0% { top: 8%; } 100% { top: 92%; } }
 
-        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 5px 0; transition: all 0.3s; }
-        .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 8px; }
-        .progress-fill { height: 100%; width: 0%; background-color: #0071e3; transition: width 0.15s ease; }
+        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 12px 0; transition: all 0.3s; }
         
-        /* NEU: Styling für die FPS-Anzeige */
+        /* --- ALTE PROGRESS-BAR ENTFERNT, HIER IST DIE NEUE MATRIX --- */
+        .matrix-container { 
+            width: 100%; 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); 
+            gap: 6px; 
+            margin-bottom: 12px; 
+            max-height: 150px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+        .matrix-box { 
+            aspect-ratio: 1 / 1; 
+            background-color: #e5e5ea; 
+            border-radius: 6px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: 700; 
+            color: #86868b; 
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        }
+        /* Wenn ein Teil geladen ist, zündet das Neon-Grün */
+        .matrix-box.loaded { 
+            background-color: #34c759; 
+            color: white; 
+            box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
+            transform: scale(1.05);
+        }
+
         #fpsCounter { font-size: 12px; font-weight: 600; color: #86868b; text-align: center; margin-bottom: 20px; font-family: monospace; letter-spacing: 0.5px; transition: opacity 0.3s; }
 
         .result-card { width: 100%; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; transform: translateY(40px); opacity: 0; display: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -93,9 +121,7 @@
     
     <div id="status">Warte auf Kamera-Freigabe...</div>
     
-    <div class="progress-bar" id="progressContainer">
-        <div id="progress" class="progress-fill"></div>
-    </div>
+    <div class="matrix-container" id="matrixContainer"></div>
 
     <div id="fpsCounter">Scan-Rate: 0.0 FPS</div>
     
@@ -118,8 +144,6 @@
     let streamMode = 'TX'; 
     let rawAssembledText = ""; 
     let encryptedPayloadBase64 = "";
-
-    // Globale Variable für das FPS Gleitfenster
     let scanTimestamps = [];
 
     function startScanner() {
@@ -135,7 +159,7 @@
         .then(() => {
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
             document.getElementById("scanFrame").style.display = "block";
-            scanTimestamps = []; // Reset der Zeitstempel
+            scanTimestamps = [];
         }).catch(err => {
             document.getElementById("status").innerText = "Kamerafehler: " + err;
         });
@@ -148,8 +172,6 @@
     function calculateLiveFPS() {
         const now = performance.now();
         scanTimestamps.push(now);
-        
-        // Lösche alle Zeitstempel, die älter als 2 Sekunden sind (Sliding Window)
         scanTimestamps = scanTimestamps.filter(t => now - t <= 2000);
         
         let currentFps = 0;
@@ -157,15 +179,27 @@
             const timeDiffSeconds = (now - scanTimestamps[0]) / 1000;
             currentFps = (scanTimestamps.length - 1) / timeDiffSeconds;
         }
-        
         document.getElementById("fpsCounter").innerText = `Scan-Rate: ${currentFps.toFixed(1)} FPS`;
+    }
+
+    // Erzeugt das Schachbrett-Muster dynamisch im HTML
+    function buildLiveMatrix(totalFrames) {
+        const container = document.getElementById("matrixContainer");
+        container.innerHTML = ""; // Leeren
+        
+        for (let i = 1; i <= totalFrames; i++) {
+            const box = document.createElement("div");
+            box.id = `matrix-box-${i}`;
+            box.className = "matrix-box";
+            box.innerText = i; // Frame Nummer auf das Quadrat schreiben
+            container.appendChild(box);
+        }
     }
 
     function onScanSuccess(decodedText) {
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
         if (!protocolMatch) return; 
 
-        // Bei jedem gültigen Paket aus unserem Protokoll die FPS neu berechnen
         calculateLiveFPS();
 
         const currentFrame = parseInt(protocolMatch[1]);
@@ -173,17 +207,25 @@
         const frameMode = protocolMatch[3];
         const payload = protocolMatch[4];
 
+        // Wenn ein völlig neuer Datenstrom startet, die Matrix aufbauen
         if (totalChunksCount !== totalFrames) {
             totalChunksCount = totalFrames;
             receivedChunks = {};
             streamMode = frameMode; 
-            scanTimestamps = []; // Reset bei neuem Stream
+            scanTimestamps = [];
+            buildLiveMatrix(totalFrames); // Matrix generieren
         }
 
         if (!receivedChunks[currentFrame]) {
             receivedChunks[currentFrame] = payload;
+            
+            // Das entsprechende Quadrat in der Matrix grün einfärben!
+            const box = document.getElementById(`matrix-box-${currentFrame}`);
+            if (box) {
+                box.classList.add("loaded");
+            }
+            
             const receivedCount = Object.keys(receivedChunks).length;
-            document.getElementById("progress").style.width = (receivedCount / totalFrames) * 100 + "%";
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
 
             if (receivedCount === totalFrames) {
@@ -195,9 +237,9 @@
     function assembleAndCheckEncryption() {
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
-        document.getElementById("progressContainer").style.display = "none";
         document.getElementById("status").style.display = "none";
-        document.getElementById("fpsCounter").style.display = "none"; // FPS-Anzeige ausblenden
+        document.getElementById("fpsCounter").style.display = "none";
+        document.getElementById("matrixContainer").style.display = "none"; // Matrix ausblenden
 
         let fullAssembledString = "";
         for (let i = 1; i <= totalChunksCount; i++) {
@@ -291,8 +333,9 @@
         setTimeout(() => {
             card.style.display = "none";
             document.getElementById("scannerContainer").classList.remove("minimized");
-            document.getElementById("progressContainer").style.display = "block";
-            document.getElementById("fpsCounter").style.display = "block"; // FPS-Anzeige wieder einblenden
+            document.getElementById("matrixContainer").style.display = "grid"; // Matrix zurücksetzen
+            document.getElementById("matrixContainer").innerHTML = ""; 
+            document.getElementById("fpsCounter").style.display = "block"; 
             document.getElementById("fpsCounter").innerText = "Scan-Rate: 0.0 FPS";
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
@@ -304,8 +347,6 @@
             encryptedPayloadBase64 = "";
             scanTimestamps = [];
             
-            document.getElementById("progress").style.width = "0%";
-            document.getElementById("result-content").innerHTML = "";
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
             
             const copyBtn = document.getElementById("copyBtn");
@@ -330,13 +371,7 @@
 
     function shareText() {
         if (!rawAssembledText || !navigator.share) return;
-        
-        navigator.share({
-            title: 'Sicherer Datenempfang (QR)',
-            text: rawAssembledText
-        }).catch((error) => {
-            console.log('Teilen abgebrochen oder fehlerhaft', error);
-        });
+        navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch((e) => {});
     }
 
     window.addEventListener('DOMContentLoaded', startScanner);
