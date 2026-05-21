@@ -29,17 +29,19 @@ https://josija-nydegger.github.io/QR-tool/QR-Reader.html
 Das Tool besteht aus zwei simplen, schlanken HTML-Dateien:
 
 ### 1. `QR-Streamer.html` (Der Sender)
-Diese Datei wird lokal auf dem Computer (z. B. Mac) ausgeführt.
-* **Modus-Auswahl:** Unterstützt wahlweise reinen Text (`Raw Text`) oder formatiertes `Markdown`.
+Diese Datei wird lokal auf dem Computer (z. B. Mac) oder einem zweiten Smartphone ausgeführt.
+* **Modus-Auswahl:** Unterstützt wahlweise reinen Text (`Raw Text`) oder formatiertes `Markdown` (inkl. LaTeX).
 * **Turbo-Kompression:** Nutzt die `lz-string`-Bibliothek, um Texte vor dem Senden im Hintergrund radikal zu komprimieren. Das spart bis zu 50 % der Datenmenge ein und halbiert die nötige Frame-Anzahl.
 * **Pre-Rendering:** Um Abstürze im Browser zu verhindern, berechnet der Streamer alle QR-Codes als starre Bilder im Voraus (Filmrolle), bevor der Stream startet. Beim Abspielen werden nur noch die fertigen Bilder mit der gewünschten Hertz-Zahl (FPS) ausgetauscht.
 
 ### 2. `QR-Reader.html` (Der Empfänger)
 Diese Datei wird auf dem Smartphone ausgeführt und über GitHub Pages unter der oben genannten HTTPS-Adresse bereitgestellt.
 * **Echtzeit-Dekodierung:** Greift auf die Handykamera zu und analysiert den Videostream mit 30 FPS.
+* **Modernes Scanner-UI:** Bietet ein "Native App"-Gefühl mit abgedunkeltem Sucher, Neon-Fokus-Rahmen und animiertem Scan-Laser.
 * **Auto-Decompress:** Erkennt komprimierte Datenströme vollautomatisch und entpackt sie blitzschnell nach dem Empfang.
-* **Markdown-Parser:** Integriert `marked.js`, um übertragenen Markdown-Code (Überschriften, Listen, fette Texte, Links) direkt visuell ansprechend auf dem Smartphone-Bildschirm zu rendern.
-* **Clipboard-Integration:** Über den Button "Text kopieren" wird der saubere, dekomprimierte Rohtext (inklusive der Markdown-Formatstempel) direkt in die iOS/Android-Zwischenablage kopiert, um ihn in anderen Apps weiterzuverwenden.
+* **Markdown & LaTeX-Parser:** Integriert `marked.js` und `KaTeX`, um Markdown-Code und komplexe mathematische Formeln (z.B. `$$E=mc^2$$`) direkt visuell ansprechend zu rendern.
+* **Dynamische Live-Karte:** Nach erfolgreichem Empfang minimiert sich das Scanner-Fenster flüssig und die Daten werden auf einer eleganten Ergebnis-Karte präsentiert.
+* **Clipboard-Integration:** Über den Button "Text kopieren" wird der saubere, dekomprimierte Rohtext (inklusive der Formatstempel) direkt in die iOS/Android-Zwischenablage kopiert.
 
 ---
 
@@ -72,17 +74,17 @@ Da Smartphones den Kamerazugriff im Browser aus Datenschutzgründen nur über ge
 
 ## 📖 Bedienungsanleitung für einen Testlauf
 
-1. Öffne den **QR-Streamer** auf dem PC, wähle den gewünschten Modus (Raw Text oder Markdown) und füge deinen Text ein.
+1. Öffne den **QR-Streamer** auf dem PC, wähle den gewünschten Modus und füge deinen Text ein.
 2. Stelle die **Paketgrösse** auf `Gross (300 Zeichen - Sweet Spot)` und die **Geschwindigkeit** auf `10` (FPS).
 3. Die Live-Statistik zeigt dir sofort die originale Byte-Grösse sowie die reale Dateneinsparung durch die Kompression an.
 4. Rufe auf dem Smartphone den oben bereitgestellten **Link** auf und erlaube den Kamerazugriff.
-5. Klicke am PC auf **Stream starten** (der Streamer berechnet kurz die Bilder vor und startet dann die Sequenz).
-6. Richte die Handykamera so auf den Bildschirm, dass der grosse QR-Code gut im quadratischen Sucherfenster zu sehen ist.
-7. Der grüne Fortschrittsbalken füllt sich. Sobald alle Frames einmal erfasst wurden, vibriert das Handy und der fertig entpackte (und ggf. gerenderte) Text ploppt auf.
-8. Klicke auf **Text kopieren**, um den Inhalt im Smartphone-Zwischenspeicher zu sichern.
+5. Klicke am PC auf **Stream starten**.
+6. Richte die Handykamera so auf den Bildschirm, dass der QR-Code gut innerhalb des Neon-Rahmens zentriert ist.
+7. Der grüne Fortschrittsbalken füllt sich. Sobald alle Frames einmal erfasst wurden, blendet sich der Scanner aus und die Ergebnis-Karte fährt nach oben.
+8. Klicke auf **Text kopieren 📋**, um den Inhalt im Smartphone-Zwischenspeicher zu sichern.
 
 ---
 
 ## 🔒 Sicherheitsmerkmale
 * **Echte Einbahnstrasse:** Es existiert kein physikalischer Rückkanal vom Smartphone zum Computer. Ein infiziertes Smartphone kann den sendenden Computer niemals kompromittieren.
-* **Automatisches Sanitizing:** Der Sender bügelt komplexe oder unsichtbare Steuerzeichen sowie typografische KIs-Sonderzeichen (z.B. lange Gedankenstriche) vor der Verarbeitung glatt, um Abstürze der QR-Engine auszuschliessen.
+* **Automatisches Sanitizing:** Der Sender bügelt komplexe oder unsichtbare Steuerzeichen vor der Verarbeitung glatt, um Abstürze der QR-Engine auszuschliessen.
