@@ -7,6 +7,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
+
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -28,7 +33,7 @@
         }
         h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
         
-        /* --- SCANNER WRAPPER & TRANSITION --- */
+        /* Scanner Wrapper & Transition */
         .scanner-wrapper {
             position: relative;
             width: 100%;
@@ -38,41 +43,18 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        /* Wenn fertig, schrumpft der Scanner elegant zusammen */
-        .scanner-wrapper.minimized {
-            height: 120px !important;
-            opacity: 0.6;
-            margin-bottom: 10px;
-        }
-        #reader {
-            width: 100%;
-            border: none;
-        }
+        .scanner-wrapper.minimized { height: 120px !important; opacity: 0.6; margin-bottom: 10px; }
+        #reader { width: 100%; border: none; }
         
         /* Neon-Fokus-Rahmen */
         .scan-frame {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70%;
-            aspect-ratio: 1 / 1;
-            pointer-events: none;
-            z-index: 10;
-            display: none;
-            transition: all 0.3s ease;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 70%; aspect-ratio: 1 / 1;
+            pointer-events: none; z-index: 10; display: none; transition: all 0.3s ease;
         }
-        .scanner-wrapper.minimized .scan-frame {
-            display: none !important; /* Blendet Rahmen aus, wenn minimiert */
-        }
-        .scan-corner {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border-color: #0071e3; /* Edles Apple-Blau statt Grün */
-            border-style: solid;
-            box-shadow: 0 0 12px rgba(0, 113, 227, 0.3);
-        }
+        .scanner-wrapper.minimized .scan-frame { display: none !important; }
+        .scan-corner { position: absolute; width: 30px; height: 30px; border-color: #0071e3; border-style: solid; box-shadow: 0 0 12px rgba(0, 113, 227, 0.3); }
         .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
         .top-right { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 8px 0 0; }
         .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 8px; }
@@ -80,68 +62,27 @@
         
         /* Pulsierender Laser */
         .scan-laser {
-            position: absolute;
-            top: 0;
-            left: 5%;
-            width: 90%;
-            height: 2px;
-            background-color: #0071e3;
-            box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8);
+            position: absolute; top: 0; left: 5%; width: 90%; height: 2px;
+            background-color: #0071e3; box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8);
             animation: scan 2.5s infinite linear alternate;
         }
-        @keyframes scan {
-            0% { top: 8%; }
-            100% { top: 92%; }
-        }
+        @keyframes scan { 0% { top: 8%; } 100% { top: 92%; } }
 
         /* Status & Progress */
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 5px 0; transition: all 0.3s; }
         .progress-bar { width: 100%; background-color: #e5e5ea; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 20px; }
         .progress-fill { height: 100%; width: 0%; background-color: #0071e3; transition: width 0.15s ease; }
         
-        /* --- NEUE LIVE-ERGEBNIS-KARTE --- */
+        /* Live-Ergebnis-Karte */
         .result-card {
-            width: 100%;
-            background: white;
-            border-radius: 20px;
-            padding: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
-            box-sizing: border-box;
-            transform: translateY(40px);
-            opacity: 0;
-            display: none;
-            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            width: 100%; background: white; border-radius: 20px; padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box;
+            transform: translateY(40px); opacity: 0; display: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        /* Klasse wird per JS hinzugefügt, wenn Text da ist */
-        .result-card.reveal {
-            display: block;
-            transform: translateY(0);
-            opacity: 1;
-            margin-top: 15px;
-        }
+        .result-card.reveal { display: block; transform: translateY(0); opacity: 1; margin-top: 15px; }
+        .card-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #86868b; margin-bottom: 12px; border-bottom: 1px solid #f2f2f7; padding-bottom: 6px; }
         
-        .card-header {
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #86868b;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #f2f2f7;
-            padding-bottom: 6px;
-        }
-        
-        /* Das gerenderte Inhaltsfeld */
-        #result-content {
-            font-size: 16px;
-            line-height: 1.5;
-            color: #1d1d1f;
-            max-height: 280px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-        
-        /* Schickes Markdown-Styling im Inneren der Karte */
+        #result-content { font-size: 16px; line-height: 1.5; color: #1d1d1f; max-height: 280px; overflow-y: auto; padding-right: 5px; }
         #result-content h1 { font-size: 22px; margin: 0 0 10px 0; color: #000; }
         #result-content h2 { font-size: 18px; margin: 15px 0 8px 0; color: #000; }
         #result-content p { margin: 0 0 12px 0; }
@@ -149,15 +90,13 @@
         #result-content li { margin-bottom: 5px; }
         #result-content code { background: #f2f2f7; padding: 3px 6px; border-radius: 6px; font-family: monospace; font-size: 14px; }
         #result-content a { color: #0071e3; text-decoration: none; }
-        #result-content a:hover { text-decoration: underline; }
         
-        /* Button Bedienleiste am Fussende der Karte */
+        /* Button Bedienleiste */
         .button-group { display: flex; gap: 12px; margin-top: 20px; }
         button { flex: 2; padding: 14px; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
         button:active { transform: scale(0.98); }
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
         .btn-reset { background-color: #f5f5f7; color: #ff3b30; flex: 1; font-weight: 500; }
-        .btn-reset:hover { background-color: #e5e5ea; }
     </style>
 </head>
 <body>
@@ -205,7 +144,6 @@
         const config = { 
             fps: 30, 
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // Quadratischer Fokusbereich abgestimmt auf unseren Rahmen
                 return { width: viewfinderWidth * 0.70, height: viewfinderWidth * 0.70 };
             }
         };
@@ -221,7 +159,6 @@
 
     function onScanSuccess(decodedText) {
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
-        
         if (!protocolMatch) return; 
 
         const currentFrame = parseInt(protocolMatch[1]);
@@ -237,11 +174,8 @@
 
         if (!receivedChunks[currentFrame]) {
             receivedChunks[currentFrame] = payload;
-            
             const receivedCount = Object.keys(receivedChunks).length;
-            const progressPercent = (receivedCount / totalFrames) * 100;
-            document.getElementById("progress").style.width = progressPercent + "%";
-            
+            document.getElementById("progress").style.width = (receivedCount / totalFrames) * 100 + "%";
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
 
             if (receivedCount === totalFrames) {
@@ -251,7 +185,6 @@
     }
 
     function assembleText() {
-        // 1. Scanner-Animationen stoppen & UI minimieren
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("progressContainer").style.display = "none";
@@ -264,7 +197,6 @@
         
         let finalDecodedText = fullAssembledString;
 
-        // Dekomprimieren, falls nötig
         if (streamMode === 'CX' || streamMode === 'CM') {
             try {
                 finalDecodedText = LZString.decompressFromEncodedURIComponent(fullAssembledString);
@@ -279,42 +211,42 @@
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
         
-        // Inhalt in die Live-Karte rendern
         if (streamMode === 'MD' || streamMode === 'CM') {
             contentArea.innerHTML = marked.parse(finalDecodedText);
-            headerArea.innerText = "📝 Empfängnis: Markdown Dokument";
+            headerArea.innerText = "📝 Empfängnis: Markdown & LaTeX";
         } else {
             contentArea.innerText = finalDecodedText;
-            headerArea.innerText = "📄 Empfängnis: Reiner Text (Plaintext)";
+            headerArea.innerText = "📄 Empfängnis: Reiner Text & LaTeX";
         }
+
+        // NEU: Auto-Render für LaTeX (KaTeX) ausführen
+        renderMathInElement(contentArea, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},  // Formeln zentriert in einer eigenen Zeile
+                {left: '$', right: '$', display: false}    // Formeln fortlaufend im Text (Inline)
+            ],
+            throwOnError: false // Verhindert, dass die App bei einem Tippfehler in der Formel abstürzt
+        });
         
-        // 2. Die Live-Karte mit CSS-Slide-In enthüllen
         const card = document.getElementById("resultCard");
         card.style.display = "block";
-        setTimeout(() => {
-            card.classList.add("reveal");
-        }, 50);
+        setTimeout(() => { card.classList.add("reveal"); }, 50);
         
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     }
 
     function resetScanner() {
-        // Karte wieder verstecken
         const card = document.getElementById("resultCard");
         card.classList.remove("reveal");
         
         setTimeout(() => {
             card.style.display = "none";
-            
-            // Scanner-UI in den Originalzustand zurückversetzen
             document.getElementById("scannerContainer").classList.remove("minimized");
             document.getElementById("progressContainer").style.display = "block";
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             
-            receivedChunks = {};
-            totalChunksCount = 0;
-            rawAssembledText = "";
+            receivedChunks = {}; totalChunksCount = 0; rawAssembledText = "";
             document.getElementById("progress").style.width = "0%";
             document.getElementById("result-content").innerHTML = "";
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
@@ -322,18 +254,16 @@
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Text kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
-        }, 400); // Wartet, bis die Ausblend-Animation vorbei ist
+        }, 400); 
     }
 
     function copyText() {
         if (!rawAssembledText) return;
-
         navigator.clipboard.writeText(rawAssembledText).then(() => {
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "In Zwischenablage gesichert! ✓";
             copyBtn.style.backgroundColor = "#34c759";
             if (navigator.vibrate) navigator.vibrate(50);
-
             setTimeout(() => {
                 copyBtn.innerText = "Text kopieren 📋";
                 copyBtn.style.backgroundColor = "#0071e3";
