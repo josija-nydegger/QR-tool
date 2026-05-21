@@ -78,4 +78,11 @@ Da Smartphones den Kamerazugriff im Browser aus Datenschutzgründen nur über ge
 4. Rufe auf dem Smartphone den oben bereitgestellten **Link** auf und erlaube den Kamerazugriff.
 5. Klicke am PC auf **Stream starten** (der Streamer berechnet kurz die Bilder vor und startet dann die Sequenz).
 6. Richte die Handykamera so auf den Bildschirm, dass der grosse QR-Code gut im quadratischen Sucherfenster zu sehen ist.
-7.
+7. Der grüne Fortschrittsbalken füllt sich. Sobald alle Frames einmal erfasst wurden, vibriert das Handy und der fertig entpackte (und ggf. gerenderte) Text ploppt auf.
+8. Klicke auf **Text kopieren**, um den Inhalt im Smartphone-Zwischenspeicher zu sichern.
+
+---
+
+## 🔒 Sicherheitsmerkmale
+* **Echte Einbahnstrasse:** Es existiert kein physikalischer Rückkanal vom Smartphone zum Computer. Ein infiziertes Smartphone kann den sendenden Computer niemals kompromittieren.
+* **Automatisches Sanitizing:** Der Sender bügelt komplexe oder unsichtbare Steuerzeichen sowie typografische KIs-Sonderzeichen (z.B. lange Gedankenstriche) vor der Verarbeitung glatt, um Abstürze der QR-Engine auszuschliessen.
