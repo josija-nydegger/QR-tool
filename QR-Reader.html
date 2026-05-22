@@ -38,7 +38,6 @@
         
         .matrix-container { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; margin-bottom: 12px; max-height: 150px; overflow-y: auto; transition: all 0.3s ease; }
         
-        /* NEU: CSS Sorting Logic */
         .matrix-box { 
             aspect-ratio: 1 / 1; 
             background-color: #e5e5ea; 
@@ -50,7 +49,7 @@
             font-weight: 700; 
             color: #86868b; 
             transition: transform 0.15s, background-color 0.15s, box-shadow 0.15s; 
-            order: 0; /* Graue Kacheln bleiben oben */
+            order: 0; 
         }
         
         .matrix-box.loaded { 
@@ -58,7 +57,7 @@
             color: white; 
             box-shadow: 0 0 8px rgba(52, 199, 89, 0.4); 
             transform: scale(1.05); 
-            order: 1; /* Grüne Kacheln rutschen sofort nach unten */
+            order: 1; 
         }
 
         #fpsCounter { font-size: 12px; font-weight: 600; color: #86868b; text-align: center; margin-bottom: 20px; font-family: monospace; letter-spacing: 0.5px; transition: opacity 0.3s; }
@@ -81,12 +80,18 @@
         #result-content td { padding: 10px 12px; border-bottom: 1px solid #e5e5ea; }
         #result-content tr:last-child td { border-bottom: none; }
         
-        .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: nowrap; }
-        button { flex: 1; padding: 12px 8px; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        /* Modernisiertes Apple-Button-Grid-Layout */
+        .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        button { flex: 1 1 calc(33.33% - 6px); min-width: 85px; padding: 12px 6px; color: white; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
         button:active { transform: scale(0.96); }
+        
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
         .btn-share { background-color: #5856d6; box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
-        .btn-reset { background-color: #f5f5f7; color: #ff3b30; font-weight: 500; }
+        /* NEU: Apple Orange Design für den PDF-Export */
+        .btn-pdf { background-color: #ff9500; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.2); }
+        
+        /* Reset Button streckt sich jetzt elegant über die volle Breite unten */
+        .btn-reset { background-color: #f5f5f7; color: #ff3b30; font-weight: 500; flex: 1 1 100%; margin-top: 4px; }
         .btn-reset:hover { background-color: #e5e5ea; }
         
         .crypto-ui { text-align: center; padding: 20px 0; }
@@ -95,6 +100,15 @@
         .crypto-ui input { width: 100%; padding: 14px; margin-bottom: 15px; border-radius: 10px; border: 1px solid #d2d2d7; box-sizing: border-box; font-size: 18px; text-align: center; font-family: monospace; letter-spacing: 3px; }
         .crypto-ui button { background-color: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2); width: 100%; }
         .crypto-error { color: #ff3b30; margin-top: 15px; display: none; font-weight: 600; }
+
+        /* NEU: Ultimativer, unsichtbarer Print-Schnittstellen-Filter */
+        @media print {
+            body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
+            .container { max-width: 100% !important; width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+            h1, .scanner-wrapper, #status, .matrix-container, #fpsCounter, .card-header, .button-group { display: none !important; }
+            .result-card { display: block !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; transform: none !important; opacity: 1 !important; background: white !important; }
+            #result-content { max-height: none !important; overflow-y: visible !important; padding: 0 !important; }
+        }
     </style>
 </head>
 <body>
@@ -126,6 +140,7 @@
         <div class="button-group" id="cardButtons">
             <button class="btn-copy" id="copyBtn" onclick="copyText()">Kopieren 📋</button>
             <button class="btn-share" id="shareBtn" onclick="shareText()">Teilen 📤</button>
+            <button class="btn-pdf" id="pdfBtn" onclick="exportToPDF()" style="display: none;">PDF Export 📄</button>
             <button class="btn-reset" onclick="resetScanner()">Neu scannen</button>
         </div>
     </div>
@@ -323,13 +338,17 @@
         rawAssembledText = finalDecodedText; 
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
+        const pdfBtn = document.getElementById("pdfBtn");
         
+        // NEU: Logik zur vollautomatischen Ein-/Ausblendung des PDF-Buttons je nach Modus
         if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
             contentArea.innerHTML = marked.parse(finalDecodedText);
             headerArea.innerText = "📝 Empfang: Markdown Dokument";
+            pdfBtn.style.display = "flex"; // PDF-Option aktivieren
         } else {
             contentArea.innerText = finalDecodedText;
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
+            pdfBtn.style.display = "none"; // PDF-Option verstecken
         }
 
         renderMathInElement(contentArea, {
@@ -348,6 +367,11 @@
         }
     }
 
+    // NEU: Funktion zur Aktivierung des nativen, sauberen PDF-Exports
+    function exportToPDF() {
+        window.print();
+    }
+
     function resetScanner() {
         const card = document.getElementById("resultCard");
         card.classList.remove("reveal");
@@ -362,6 +386,7 @@
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             document.getElementById("cardButtons").style.display = "flex";
+            document.getElementById("pdfBtn").style.display = "none"; // Beim Reset ausblenden
             
             receivedChunks = {};
             totalChunksCount = 0;
