@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Krypto, Shuffle & vCard)</title>
+    <title>QR-Code Datenüberträger (Sender - Precision Edition)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -25,7 +25,6 @@
         .btn-clear:hover { opacity: 0.7; }
         #textStats { font-size: 13px; color: #86868b; font-weight: 500; }
 
-        /* vCard Formular Styling */
         .vcard-form { display: none; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; margin-bottom: 15px; }
         .vcard-row { display: flex; gap: 10px; margin-bottom: 10px; }
         .vcard-row div { flex: 1; }
@@ -44,8 +43,12 @@
         .remember-pin-label input { width: 16px; height: 16px; cursor: pointer; }
 
         .controls-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
-        select, input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
+        select, input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
         
+        .precision-wrapper { margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5ea; }
+        .precision-wrapper input { font-family: monospace; }
+        .precision-hint { font-size: 12px; color: #86868b; margin-top: 4px; display: block; }
+
         .action-buttons { display: flex; gap: 10px; margin-top: 20px; }
         button.action-btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
         .btn-start { background-color: #0071e3; color: white; }
@@ -56,7 +59,7 @@
         
         #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; width: 100%; max-width: 600px; cursor: default; }
         #qr-image { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 20px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: all 0.3s; }
-        #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; transition: opacity 0.3s; }
+        #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; transition: opacity 0.3s; text-align: center; }
 
         body.kino-mode { background-color: #000; justify-content: center; height: 100vh; overflow: hidden; padding: 0; }
         body.kino-mode .container { display: none; }
@@ -68,7 +71,7 @@
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Krypto & vCard)</h1>
+    <h1>QR-Streamer (Precision)</h1>
     
     <label>Sende-Modus:</label>
     <div class="mode-selector">
@@ -110,7 +113,6 @@
             <label style="margin-top:5px;">Firma / Organisation:</label>
             <input type="text" id="vcFirma" placeholder="Musterfirma GmbH">
         </div>
-        
         <div class="textarea-footer" style="margin-top: 15px; border-top: 1px solid #e5e5ea; padding-top: 10px;">
             <button class="btn-clear" onclick="clearVCard()">Formular leeren 🗑️</button>
         </div>
@@ -142,6 +144,12 @@
                 <label for="fps">Geschwindigkeit (FPS):</label>
                 <input type="number" id="fps" value="15" min="1" max="30">
             </div>
+        </div>
+        
+        <div class="precision-wrapper">
+            <label for="targetFrames" style="margin-top:0;">🎯 Gezielte Frames senden (Optional):</label>
+            <input type="text" id="targetFrames" placeholder="z.B. 2, 15, 36">
+            <span class="precision-hint">Lass das Feld leer, um das gesamte Dokument normal zu senden.</span>
         </div>
     </div>
     
@@ -177,15 +185,12 @@
         updateStats();
     }
 
-    // NEU: Funktion um alle vCard Eingabefelder blitzschnell zu leeren
     function clearVCard() {
         document.getElementById("vcVorname").value = "";
         document.getElementById("vcNachname").value = "";
         document.getElementById("vcTelefon").value = "";
         document.getElementById("vcEmail").value = "";
         document.getElementById("vcFirma").value = "";
-        
-        // Falls gerade eine Visitenkarte gestreamt wird, brechen wir den Stream ab
         if (currentMode === 'VC' && document.getElementById("stopBtn").style.display === "block") {
             stopStreaming();
         }
@@ -238,11 +243,10 @@
         } else {
             txtGroup.style.display = "block";
             vcFormGroup.style.display = "none";
-            controlsGroup.style.display = "grid";
+            controlsGroup.style.display = "block";
             btnKino.style.display = "block";
         }
         
-        // Beim Moduswechsel den alten QR-Code sicherheitshalber löschen
         if (animationInterval) stopStreaming();
     }
 
@@ -318,6 +322,7 @@
         let pinInput = document.getElementById("pinInput");
         let pin = pinInput.value;
         let shouldRemember = document.getElementById("rememberPin").checked;
+        let targetFramesInput = document.getElementById("targetFrames").value.trim();
         
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
@@ -359,7 +364,27 @@
             frames.push(qr.toDataURL());
         }
 
-        playbackSequence = Array.from({length: totalChunks}, (_, i) => i);
+        // NEU: Logik für gezielte Frames (Precision Targeting)
+        playbackSequence = [];
+        let isPrecisionMode = false;
+
+        if (targetFramesInput !== "") {
+            const parts = targetFramesInput.split(',');
+            for (let part of parts) {
+                const num = parseInt(part.trim());
+                if (!isNaN(num) && num >= 1 && num <= totalChunks) {
+                    playbackSequence.push(num - 1); // Array-Index beginnt bei 0
+                }
+            }
+        }
+
+        // Wenn keine gültigen spezifischen Frames gefunden wurden, normalen Durchlauf starten
+        if (playbackSequence.length === 0) {
+            playbackSequence = Array.from({length: totalChunks}, (_, i) => i);
+        } else {
+            isPrecisionMode = true;
+        }
+
         sequenceIndex = 0;
         isShuffling = false;
 
@@ -367,18 +392,21 @@
             let actualFrameIndex = playbackSequence[sequenceIndex];
             document.getElementById("qr-image").src = frames[actualFrameIndex];
             
-            let statusText = `Sende Frame ${actualFrameIndex + 1} von ${totalChunks} (${fps} Hz) [Modus: ${transmitMode}]`;
+            let statusText = `Sende Frame ${actualFrameIndex + 1} von ${totalChunks} (${fps} Hz)`;
             if (transmitMode === 'EX' || transmitMode === 'EM') statusText += " 🔒"; 
             if (useKinoMode) statusText += " (Klick zum Beenden)";
-            if (isShuffling) statusText += " 🔀";
+            if (isPrecisionMode) statusText += " 🎯 (Precision Mode)";
+            else if (isShuffling) statusText += " 🔀";
             
             document.getElementById("status").innerText = statusText;
             sequenceIndex++;
             
-            if (sequenceIndex >= totalChunks) {
+            if (sequenceIndex >= playbackSequence.length) {
                 sequenceIndex = 0;
-                isShuffling = true;
-                shuffleArray(playbackSequence);
+                if (!isPrecisionMode) {
+                    isShuffling = true;
+                    shuffleArray(playbackSequence);
+                }
             }
         }, 1000 / fps);
 
