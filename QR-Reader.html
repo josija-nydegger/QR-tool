@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR-Code Datenüberträger (Empfänger)</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <title>QR-Code Datenüberträger (ZBar WASM-Edition)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@latest/dist/index.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
     <style>
@@ -19,11 +19,13 @@
         .container { max-width: 500px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
         h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
         
-        .scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        .scanner-wrapper.minimized { height: 120px !important; opacity: 0.6; margin-bottom: 10px; }
-        #reader { width: 100%; border: none; }
+        .scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); aspect-ratio: 4 / 3; }
+        .scanner-wrapper.minimized { height: 120px !important; aspect-ratio: auto; opacity: 0.6; margin-bottom: 10px; }
         
-        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; aspect-ratio: 1 / 1; pointer-events: none; z-index: 10; display: none; transition: all 0.3s ease; }
+        /* Direkte Kontrolle über das Video-Element für perfekte Performance */
+        #videoElement { width: 100%; height: 100%; object-fit: cover; display: block; }
+        
+        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; aspect-ratio: 1 / 1; pointer-events: none; z-index: 10; display: block; transition: all 0.3s ease; }
         .scanner-wrapper.minimized .scan-frame { display: none !important; }
         .scan-corner { position: absolute; width: 30px; height: 30px; border-color: #0071e3; border-style: solid; box-shadow: 0 0 12px rgba(0, 113, 227, 0.3); }
         .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
@@ -36,36 +38,9 @@
 
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 12px 0; transition: all 0.3s; }
         
-        /* --- ALTE PROGRESS-BAR ENTFERNT, HIER IST DIE NEUE MATRIX --- */
-        .matrix-container { 
-            width: 100%; 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); 
-            gap: 6px; 
-            margin-bottom: 12px; 
-            max-height: 150px;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-        }
-        .matrix-box { 
-            aspect-ratio: 1 / 1; 
-            background-color: #e5e5ea; 
-            border-radius: 6px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 11px; 
-            font-weight: 700; 
-            color: #86868b; 
-            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-        }
-        /* Wenn ein Teil geladen ist, zündet das Neon-Grün */
-        .matrix-box.loaded { 
-            background-color: #34c759; 
-            color: white; 
-            box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
-            transform: scale(1.05);
-        }
+        .matrix-container { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; margin-bottom: 12px; max-height: 150px; overflow-y: auto; transition: all 0.3s ease; }
+        .matrix-box { aspect-ratio: 1 / 1; background-color: #e5e5ea; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #86868b; transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .matrix-box.loaded { background-color: #34c759; color: white; box-shadow: 0 0 8px rgba(52, 199, 89, 0.4); transform: scale(1.05); }
 
         #fpsCounter { font-size: 12px; font-weight: 600; color: #86868b; text-align: center; margin-bottom: 20px; font-family: monospace; letter-spacing: 0.5px; transition: opacity 0.3s; }
 
@@ -106,10 +81,11 @@
 <body>
 
 <div class="container">
-    <h1>QR-Receiver</h1>
+    <h1>QR-Receiver (WASM)</h1>
     
     <div class="scanner-wrapper" id="scannerContainer">
-        <div id="reader"></div>
+        <video id="videoElement" muted autoplay playsinline></video>
+        
         <div id="scanFrame" class="scan-frame">
             <div class="scan-corner top-left"></div>
             <div class="scan-corner top-right"></div>
@@ -122,7 +98,6 @@
     <div id="status">Warte auf Kamera-Freigabe...</div>
     
     <div class="matrix-container" id="matrixContainer"></div>
-
     <div id="fpsCounter">Scan-Rate: 0.0 FPS</div>
     
     <div class="result-card" id="resultCard">
@@ -140,33 +115,73 @@
 <script>
     let receivedChunks = {};
     let totalChunksCount = 0;
-    let html5QrcodeScanner = null;
     let streamMode = 'TX'; 
     let rawAssembledText = ""; 
     let encryptedPayloadBase64 = "";
     let scanTimestamps = [];
+    
+    let videoElement = null;
+    let canvasElement = null;
+    let canvasContext = null;
+    let isScanning = false;
 
-    function startScanner() {
-        html5QrcodeScanner = new Html5Qrcode("reader");
-        const config = { 
-            fps: 30, 
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                return { width: viewfinderWidth * 0.70, height: viewfinderWidth * 0.70 };
-            }
-        };
+    async function initScanner() {
+        videoElement = document.getElementById("videoElement");
+        
+        // Unsichtbare temporäre Leinwand für die WASM-Bildanalyse erstellen
+        canvasElement = document.createElement("canvas");
+        canvasContext = canvasElement.getContext("2d");
 
-        html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
-        .then(() => {
+        try {
+            // Kamera anfordern
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            videoElement.srcObject = stream;
+            
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            document.getElementById("scanFrame").style.display = "block";
-            scanTimestamps = [];
-        }).catch(err => {
-            document.getElementById("status").innerText = "Kamerafehler: " + err;
-        });
+            isScanning = true;
+            
+            // Warte kurz, bis das Video die Metadaten geladen hat, um die Leinwandgrösse anzupassen
+            videoElement.onloadedmetadata = () => {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                // Starte die ultraschnelle Verarbeitungsschleife
+                requestAnimationFrame(scanLoop);
+            };
+        } catch (err) {
+            document.getElementById("status").innerText = "Kamerafehler: " + err.message;
+        }
 
         if (!navigator.share) {
             document.getElementById('shareBtn').style.display = 'none';
         }
+    }
+
+    // Die High-Speed-Verarbeitungsschleife (läuft mit bis zu 60 FPS!)
+    async function scanLoop() {
+        if (!isScanning) return;
+
+        if (videoElement.readyState === videoElement.HAVE_CURRENT_DATA) {
+            // Frame aus dem Live-Video auf die unsichtbare Leinwand kopieren
+            canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+            
+            try {
+                // Bilddaten direkt in den WebAssembly-C-Kern von ZBar jagen
+                let symbols = await zbarWasm.scanImageData(imageData);
+                
+                if (symbols && symbols.length > 0) {
+                    let decodedText = symbols[0].decode();
+                    onScanSuccess(decodedText);
+                }
+            } catch (error) {
+                console.error("ZBar WASM Fehler: ", error);
+            }
+        }
+        
+        // Sofort den nächsten Frame anfordern (kein künstlicher Timeout!)
+        requestAnimationFrame(scanLoop);
     }
 
     function calculateLiveFPS() {
@@ -182,21 +197,20 @@
         document.getElementById("fpsCounter").innerText = `Scan-Rate: ${currentFps.toFixed(1)} FPS`;
     }
 
-    // Erzeugt das Schachbrett-Muster dynamisch im HTML
     function buildLiveMatrix(totalFrames) {
         const container = document.getElementById("matrixContainer");
-        container.innerHTML = ""; // Leeren
-        
+        container.innerHTML = "";
         for (let i = 1; i <= totalFrames; i++) {
             const box = document.createElement("div");
             box.id = `matrix-box-${i}`;
             box.className = "matrix-box";
-            box.innerText = i; // Frame Nummer auf das Quadrat schreiben
+            box.innerText = i;
             container.appendChild(box);
         }
     }
 
     function onScanSuccess(decodedText) {
+        // Überprüfen, ob der Code unserem Krypto-Protokoll entspricht
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
         if (!protocolMatch) return; 
 
@@ -207,23 +221,19 @@
         const frameMode = protocolMatch[3];
         const payload = protocolMatch[4];
 
-        // Wenn ein völlig neuer Datenstrom startet, die Matrix aufbauen
         if (totalChunksCount !== totalFrames) {
             totalChunksCount = totalFrames;
             receivedChunks = {};
             streamMode = frameMode; 
             scanTimestamps = [];
-            buildLiveMatrix(totalFrames); // Matrix generieren
+            buildLiveMatrix(totalFrames);
         }
 
         if (!receivedChunks[currentFrame]) {
             receivedChunks[currentFrame] = payload;
             
-            // Das entsprechende Quadrat in der Matrix grün einfärben!
             const box = document.getElementById(`matrix-box-${currentFrame}`);
-            if (box) {
-                box.classList.add("loaded");
-            }
+            if (box) box.classList.add("loaded");
             
             const receivedCount = Object.keys(receivedChunks).length;
             document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
@@ -235,11 +245,12 @@
     }
 
     function assembleAndCheckEncryption() {
+        isScanning = false; // Scan-Schleife stoppen
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("status").style.display = "none";
         document.getElementById("fpsCounter").style.display = "none";
-        document.getElementById("matrixContainer").style.display = "none"; // Matrix ausblenden
+        document.getElementById("matrixContainer").style.display = "none";
 
         let fullAssembledString = "";
         for (let i = 1; i <= totalChunksCount; i++) {
@@ -333,7 +344,7 @@
         setTimeout(() => {
             card.style.display = "none";
             document.getElementById("scannerContainer").classList.remove("minimized");
-            document.getElementById("matrixContainer").style.display = "grid"; // Matrix zurücksetzen
+            document.getElementById("matrixContainer").style.display = "grid";
             document.getElementById("matrixContainer").innerHTML = ""; 
             document.getElementById("fpsCounter").style.display = "block"; 
             document.getElementById("fpsCounter").innerText = "Scan-Rate: 0.0 FPS";
@@ -352,6 +363,10 @@
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
+            
+            // Scan-Schleife reaktivieren
+            isScanning = true;
+            requestAnimationFrame(scanLoop);
         }, 400);
     }
 
@@ -374,7 +389,8 @@
         navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch((e) => {});
     }
 
-    window.addEventListener('DOMContentLoaded', startScanner);
+    // Initialisierung beim Laden der Seite
+    window.addEventListener('DOMContentLoaded', initScanner);
 </script>
 
 </body>
