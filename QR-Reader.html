@@ -318,7 +318,7 @@
         }
     }
 
-    // NEU: Der intelligente CSV-Detektor
+    // Der intelligente und fehlertolerante CSV-Detektor
     function formatIfCsv(text) {
         const lines = text.trim().split('\n');
         
@@ -330,22 +330,47 @@
         const expectedColumns = lines[0].split(separator).length;
         if (expectedColumns < 2) return text;
 
-        const isStrictCsv = lines.every(line => line.split(separator).length === expectedColumns);
-        
-        if (isStrictCsv) {
-            let markdownTable = "";
-            lines.forEach((line, index) => {
-                const columns = line.split(separator).map(cell => cell.trim());
-                markdownTable += "| " + columns.join(" | ") + " |\n";
-                
-                if (index === 0) {
-                    markdownTable += "|" + columns.map(() => "---").join("|") + "|\n";
+        let validCsvLines = [];
+        let extraTextLines = [];
+        let isStillCsv = true;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            
+            if (line === "") {
+                if (!isStillCsv) extraTextLines.push(line);
+                continue;
+            }
+
+            if (isStillCsv) {
+                if (line.split(separator).length === expectedColumns) {
+                    validCsvLines.push(line);
+                } else {
+                    isStillCsv = false; 
+                    extraTextLines.push(line);
                 }
-            });
-            return markdownTable;
+            } else {
+                extraTextLines.push(line);
+            }
         }
-        
-        return text;
+
+        if (validCsvLines.length < 2) return text;
+
+        let markdownTable = "";
+        validCsvLines.forEach((line, index) => {
+            const columns = line.split(separator).map(cell => cell.trim());
+            markdownTable += "| " + columns.join(" | ") + " |\n";
+            
+            if (index === 0) {
+                markdownTable += "|" + columns.map(() => "---").join("|") + "|\n";
+            }
+        });
+
+        if (extraTextLines.length > 0) {
+            markdownTable += "\n\n" + extraTextLines.join("\n");
+        }
+
+        return markdownTable;
     }
 
     function processDecryptedData(payloadString) {
@@ -371,7 +396,6 @@
         let textForDisplay = formatIfCsv(finalDecodedText);
         let isCsv = (textForDisplay !== finalDecodedText);
         
-        // Anzeige-Logik angepasst
         if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM' || isCsv) {
             contentArea.innerHTML = marked.parse(textForDisplay, { breaks: true });
             
