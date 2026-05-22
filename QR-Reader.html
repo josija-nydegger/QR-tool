@@ -6,7 +6,6 @@
     <title>QR-Code Datenüberträger (ZBar WASM-Edition)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@latest/dist/index.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
@@ -38,8 +37,29 @@
         #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 12px 0; transition: all 0.3s; }
         
         .matrix-container { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; margin-bottom: 12px; max-height: 150px; overflow-y: auto; transition: all 0.3s ease; }
-        .matrix-box { aspect-ratio: 1 / 1; background-color: #e5e5ea; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #86868b; transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .matrix-box.loaded { background-color: #34c759; color: white; box-shadow: 0 0 8px rgba(52, 199, 89, 0.4); transform: scale(1.05); }
+        
+        /* NEU: CSS Sorting Logic */
+        .matrix-box { 
+            aspect-ratio: 1 / 1; 
+            background-color: #e5e5ea; 
+            border-radius: 6px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: 700; 
+            color: #86868b; 
+            transition: transform 0.15s, background-color 0.15s, box-shadow 0.15s; 
+            order: 0; /* Graue Kacheln bleiben oben */
+        }
+        
+        .matrix-box.loaded { 
+            background-color: #34c759; 
+            color: white; 
+            box-shadow: 0 0 8px rgba(52, 199, 89, 0.4); 
+            transform: scale(1.05); 
+            order: 1; /* Grüne Kacheln rutschen sofort nach unten */
+        }
 
         #fpsCounter { font-size: 12px; font-weight: 600; color: #86868b; text-align: center; margin-bottom: 20px; font-family: monospace; letter-spacing: 0.5px; transition: opacity 0.3s; }
 
@@ -139,8 +159,8 @@
             isScanning = true;
             
             videoElement.onloadedmetadata = () => {
-                videoElement.play(); // Explizit Play aufrufen
-                scanLoop(); // Start der reparierten Schleife
+                videoElement.play(); 
+                scanLoop(); 
             };
         } catch (err) {
             document.getElementById("status").innerText = "Kamerafehler: " + err.message;
@@ -151,15 +171,11 @@
         }
     }
 
-    // Die reparierte, stabile Verarbeitungsschleife
     async function scanLoop() {
         while (isScanning) {
-            // Eine kleine Atempause (ca. 30ms), damit der WASM-Speicher und der Akku nicht kollabieren
             await new Promise(resolve => setTimeout(resolve, 30));
 
-            // readyState >= 2 bedeutet, das Video hat verlässliche Bilddaten
             if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-                // Canvas-Grösse immer korrekt an den Video-Stream anpassen
                 canvasElement.width = videoElement.videoWidth;
                 canvasElement.height = videoElement.videoHeight;
                 
@@ -167,7 +183,6 @@
                 const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
                 
                 try {
-                    // WARTEN, bis ZBar fertig ist (await), BEVOR das nächste Bild verarbeitet wird
                     let symbols = await zbarWasm.scanImageData(imageData);
                     
                     if (symbols && symbols.length > 0) {
@@ -241,7 +256,7 @@
     }
 
     function assembleAndCheckEncryption() {
-        isScanning = false; // Scan-Schleife stoppt automatisch und gibt Speicher frei
+        isScanning = false; 
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("status").style.display = "none";
@@ -360,7 +375,6 @@
             copyBtn.innerText = "Kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
             
-            // Scan-Schleife sicher und frisch neu starten
             isScanning = true;
             scanLoop();
         }, 400);
