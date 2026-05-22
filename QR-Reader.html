@@ -22,7 +22,6 @@
         .scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); aspect-ratio: 4 / 3; }
         .scanner-wrapper.minimized { height: 120px !important; aspect-ratio: auto; opacity: 0.6; margin-bottom: 10px; }
         
-        /* Direkte Kontrolle über das Video-Element für perfekte Performance */
         #videoElement { width: 100%; height: 100%; object-fit: cover; display: block; }
         
         .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; aspect-ratio: 1 / 1; pointer-events: none; z-index: 10; display: block; transition: all 0.3s ease; }
@@ -127,13 +126,10 @@
 
     async function initScanner() {
         videoElement = document.getElementById("videoElement");
-        
-        // Unsichtbare temporäre Leinwand für die WASM-Bildanalyse erstellen
         canvasElement = document.createElement("canvas");
-        canvasContext = canvasElement.getContext("2d");
+        canvasContext = canvasElement.getContext("2d", { willReadFrequently: true });
 
         try {
-            // Kamera anfordern
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
             });
@@ -142,12 +138,9 @@
             document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
             isScanning = true;
             
-            // Warte kurz, bis das Video die Metadaten geladen hat, um die Leinwandgrösse anzupassen
             videoElement.onloadedmetadata = () => {
-                canvasElement.width = videoElement.videoWidth;
-                canvasElement.height = videoElement.videoHeight;
-                // Starte die ultraschnelle Verarbeitungsschleife
-                requestAnimationFrame(scanLoop);
+                videoElement.play(); // Explizit Play aufrufen
+                scanLoop(); // Start der reparierten Schleife
             };
         } catch (err) {
             document.getElementById("status").innerText = "Kamerafehler: " + err.message;
@@ -158,30 +151,34 @@
         }
     }
 
-    // Die High-Speed-Verarbeitungsschleife (läuft mit bis zu 60 FPS!)
+    // Die reparierte, stabile Verarbeitungsschleife
     async function scanLoop() {
-        if (!isScanning) return;
+        while (isScanning) {
+            // Eine kleine Atempause (ca. 30ms), damit der WASM-Speicher und der Akku nicht kollabieren
+            await new Promise(resolve => setTimeout(resolve, 30));
 
-        if (videoElement.readyState === videoElement.HAVE_CURRENT_DATA) {
-            // Frame aus dem Live-Video auf die unsichtbare Leinwand kopieren
-            canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-            const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
-            
-            try {
-                // Bilddaten direkt in den WebAssembly-C-Kern von ZBar jagen
-                let symbols = await zbarWasm.scanImageData(imageData);
+            // readyState >= 2 bedeutet, das Video hat verlässliche Bilddaten
+            if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+                // Canvas-Grösse immer korrekt an den Video-Stream anpassen
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
                 
-                if (symbols && symbols.length > 0) {
-                    let decodedText = symbols[0].decode();
-                    onScanSuccess(decodedText);
+                canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                
+                try {
+                    // WARTEN, bis ZBar fertig ist (await), BEVOR das nächste Bild verarbeitet wird
+                    let symbols = await zbarWasm.scanImageData(imageData);
+                    
+                    if (symbols && symbols.length > 0) {
+                        let decodedText = symbols[0].decode();
+                        onScanSuccess(decodedText);
+                    }
+                } catch (error) {
+                    console.error("ZBar Fehler: ", error);
                 }
-            } catch (error) {
-                console.error("ZBar WASM Fehler: ", error);
             }
         }
-        
-        // Sofort den nächsten Frame anfordern (kein künstlicher Timeout!)
-        requestAnimationFrame(scanLoop);
     }
 
     function calculateLiveFPS() {
@@ -210,7 +207,6 @@
     }
 
     function onScanSuccess(decodedText) {
-        // Überprüfen, ob der Code unserem Krypto-Protokoll entspricht
         const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
         if (!protocolMatch) return; 
 
@@ -245,7 +241,7 @@
     }
 
     function assembleAndCheckEncryption() {
-        isScanning = false; // Scan-Schleife stoppen
+        isScanning = false; // Scan-Schleife stoppt automatisch und gibt Speicher frei
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("status").style.display = "none";
@@ -364,9 +360,9 @@
             copyBtn.innerText = "Kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
             
-            // Scan-Schleife reaktivieren
+            // Scan-Schleife sicher und frisch neu starten
             isScanning = true;
-            requestAnimationFrame(scanLoop);
+            scanLoop();
         }, 400);
     }
 
@@ -389,7 +385,6 @@
         navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch((e) => {});
     }
 
-    // Initialisierung beim Laden der Seite
     window.addEventListener('DOMContentLoaded', initScanner);
 </script>
 
