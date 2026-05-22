@@ -1,431 +1,336 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de-CH">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR-Code Datenüberträger (ZBar WASM-Edition)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QR Reader & CSV-Parser</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@latest/dist/index.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; padding: 15px; margin: 0; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
-        .container { max-width: 500px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
-        h1 { font-size: 22px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; text-align: center; color: #1d1d1f; }
-        
-        .scanner-wrapper { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); aspect-ratio: 4 / 3; }
-        .scanner-wrapper.minimized { height: 120px !important; aspect-ratio: auto; opacity: 0.6; margin-bottom: 10px; }
-        
-        #videoElement { width: 100%; height: 100%; object-fit: cover; display: block; }
-        
-        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; aspect-ratio: 1 / 1; pointer-events: none; z-index: 10; display: block; transition: all 0.3s ease; }
-        .scanner-wrapper.minimized .scan-frame { display: none !important; }
-        .scan-corner { position: absolute; width: 30px; height: 30px; border-color: #0071e3; border-style: solid; box-shadow: 0 0 12px rgba(0, 113, 227, 0.3); }
-        .top-left { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
-        .top-right { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 8px 0 0; }
-        .bottom-left { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 8px; }
-        .bottom-right { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
-        
-        .scan-laser { position: absolute; top: 0; left: 5%; width: 90%; height: 2px; background-color: #0071e3; box-shadow: 0 0 15px 2px rgba(0, 113, 227, 0.8); animation: scan 2.5s infinite linear alternate; }
-        @keyframes scan { 0% { top: 8%; } 100% { top: 92%; } }
-
-        #status { font-weight: 600; font-size: 14px; color: #86868b; text-align: center; margin: 15px 0 12px 0; transition: all 0.3s; }
-        
-        .matrix-container { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; margin-bottom: 12px; max-height: 150px; overflow-y: auto; transition: all 0.3s ease; }
-        
-        .matrix-box { 
-            aspect-ratio: 1 / 1; 
-            background-color: #e5e5ea; 
-            border-radius: 6px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 11px; 
-            font-weight: 700; 
-            color: #86868b; 
-            transition: transform 0.15s, background-color 0.15s, box-shadow 0.15s; 
-            order: 0; 
-        }
-        
-        .matrix-box.loaded { 
-            background-color: #34c759; 
-            color: white; 
-            box-shadow: 0 0 8px rgba(52, 199, 89, 0.4); 
-            transform: scale(1.05); 
-            order: 1; 
+        :root {
+            --bg-color: #f5f5f7;
+            --card-bg: #ffffff;
+            --text-main: #1d1d1f;
+            --text-muted: #86868b;
+            --accent: #007aff;
+            --border: #d2d2d7;
         }
 
-        #fpsCounter { font-size: 12px; font-weight: 600; color: #86868b; text-align: center; margin-bottom: 20px; font-family: monospace; letter-spacing: 0.5px; transition: opacity 0.3s; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-        .result-card { width: 100%; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; transform: translateY(40px); opacity: 0; display: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-        .result-card.reveal { display: block; transform: translateY(0); opacity: 1; margin-top: 15px; }
-        .card-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #86868b; margin-bottom: 12px; border-bottom: 1px solid #f2f2f7; padding-bottom: 6px; }
-        
-        #result-content { font-size: 16px; line-height: 1.5; color: #1d1d1f; max-height: 350px; overflow-y: auto; padding-right: 5px; }
-        #result-content h1 { font-size: 22px; margin: 0 0 10px 0; color: #000; }
-        #result-content h2 { font-size: 18px; margin: 15px 0 8px 0; color: #000; }
-        #result-content p { margin: 0 0 12px 0; }
-        #result-content ul, #result-content ol { margin: 0 0 15px 0; padding-left: 22px; }
-        #result-content li { margin-bottom: 5px; }
-        #result-content code { background: #f2f2f7; padding: 3px 6px; border-radius: 6px; font-family: monospace; font-size: 14px; }
-        #result-content a { color: #0071e3; text-decoration: none; }
-        
-        #result-content table { border-collapse: collapse; width: calc(100% - 4px); margin: 15px 2px; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px #d2d2d7; font-size: 14px; }
-        #result-content th { background-color: #f2f2f7; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #d2d2d7; }
-        #result-content td { padding: 10px 12px; border-bottom: 1px solid #e5e5ea; }
-        #result-content tr:last-child td { border-bottom: none; }
-        
-        /* Modernisiertes Apple-Button-Grid-Layout */
-        .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
-        button { flex: 1 1 calc(33.33% - 6px); min-width: 85px; padding: 12px 6px; color: white; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
-        button:active { transform: scale(0.96); }
-        
-        .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
-        .btn-share { background-color: #5856d6; box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
-        /* NEU: Apple Orange Design für den PDF-Export */
-        .btn-pdf { background-color: #ff9500; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.2); }
-        
-        /* Reset Button streckt sich jetzt elegant über die volle Breite unten */
-        .btn-reset { background-color: #f5f5f7; color: #ff3b30; font-weight: 500; flex: 1 1 100%; margin-top: 4px; }
-        .btn-reset:hover { background-color: #e5e5ea; }
-        
-        .crypto-ui { text-align: center; padding: 20px 0; }
-        .crypto-ui h2 { margin-top: 0; font-size: 24px; color: #1d1d1f; }
-        .crypto-ui p { color: #86868b; margin-bottom: 20px; }
-        .crypto-ui input { width: 100%; padding: 14px; margin-bottom: 15px; border-radius: 10px; border: 1px solid #d2d2d7; box-sizing: border-box; font-size: 18px; text-align: center; font-family: monospace; letter-spacing: 3px; }
-        .crypto-ui button { background-color: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2); width: 100%; }
-        .crypto-error { color: #ff3b30; margin-top: 15px; display: none; font-weight: 600; }
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
 
-        /* NEU: Ultimativer, unsichtbarer Print-Schnittstellen-Filter */
-        @media print {
-            body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
-            .container { max-width: 100% !important; width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
-            h1, .scanner-wrapper, #status, .matrix-container, #fpsCounter, .card-header, .button-group { display: none !important; }
-            .result-card { display: block !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; transform: none !important; opacity: 1 !important; background: white !important; }
-            #result-content { max-height: none !important; overflow-y: visible !important; padding: 0 !important; }
+        .camera-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+            aspect-ratio: 4/3;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scan-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            height: 60%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            box-sizing: border-box;
+        }
+
+        .status-badge {
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .result-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: none;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 20px;
+            font-size: 15px;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            font-weight: 600;
+        }
+
+        .content-view {
+            display: none;
+            word-wrap: break-word;
+            font-size: 16px;
+            line-height: 1.5;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .content-view.active {
+            display: block;
+        }
+
+        pre, code {
+            background: var(--bg-color);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+
+        /* Apple-Style Tabelle für Markdown/CSV */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        th {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-weight: 600;
+            padding: 10px;
+            border-bottom: 2px solid var(--border);
+            text-align: left;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e5ea;
+            color: #424245;
+        }
+        tr:nth-child(even) {
+            background-color: #fbfbfd;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 20px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>QR-Receiver (WASM)</h1>
-    
-    <div class="scanner-wrapper" id="scannerContainer">
-        <video id="videoElement" muted autoplay playsinline></video>
+    <div class="container">
+        <div class="camera-wrapper">
+            <video id="video" playsinline></video>
+            <div class="scan-overlay"></div>
+        </div>
         
-        <div id="scanFrame" class="scan-frame">
-            <div class="scan-corner top-left"></div>
-            <div class="scan-corner top-right"></div>
-            <div class="scan-corner bottom-left"></div>
-            <div class="scan-corner bottom-right"></div>
-            <div class="scan-laser" id="scanLaser"></div>
+        <div id="status" class="status-badge">Kamera wird initialisiert...</div>
+
+        <div id="result-card" class="result-card">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('markdown')">Ansicht (Markdown/CSV)</button>
+                <button class="tab-btn" onclick="switchTab('raw')">Roh-Text</button>
+            </div>
+
+            <div id="view-markdown" class="content-view active"></div>
+            
+            <div id="view-raw" class="content-view" style="font-family: monospace; white-space: pre-wrap;"></div>
+
+            <button class="btn-primary" onclick="copyRawText()">Roh-Text kopieren 📋</button>
+            <button class="btn-primary" style="background: #34c759; margin-top: 10px;" onclick="resetScanner()">Neuer Scan</button>
         </div>
     </div>
-    
-    <div id="status">Warte auf Kamera-Freigabe...</div>
-    
-    <div class="matrix-container" id="matrixContainer"></div>
-    <div id="fpsCounter">Scan-Rate: 0.0 FPS</div>
-    
-    <div class="result-card" id="resultCard">
-        <div class="card-header" id="cardTypeHeader">Empfangene Daten</div>
-        <div id="result-content"></div>
+
+    <script>
+        const video = document.getElementById("video");
+        const status = document.getElementById("status");
+        const resultCard = document.getElementById("result-card");
+        const viewMarkdown = document.getElementById("view-markdown");
+        const viewRaw = document.getElementById("view-raw");
         
-        <div class="button-group" id="cardButtons">
-            <button class="btn-copy" id="copyBtn" onclick="copyText()">Kopieren 📋</button>
-            <button class="btn-share" id="shareBtn" onclick="shareText()">Teilen 📤</button>
-            <button class="btn-pdf" id="pdfBtn" onclick="exportToPDF()" style="display: none;">PDF Export 📄</button>
-            <button class="btn-reset" onclick="resetScanner()">Neu scannen</button>
-        </div>
-    </div>
-</div>
+        let scanning = true;
+        let originalText = ""; // Behält den rohen Text, unangetastet
 
-<script>
-    let receivedChunks = {};
-    let totalChunksCount = 0;
-    let streamMode = 'TX'; 
-    let rawAssembledText = ""; 
-    let encryptedPayloadBase64 = "";
-    let scanTimestamps = [];
-    
-    let videoElement = null;
-    let canvasElement = null;
-    let canvasContext = null;
-    let isScanning = false;
+        // Kamera starten
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute("playsinline", true);
+            video.play();
+            requestAnimationFrame(tick);
+            status.innerText = "Suche QR-Code...";
+        }).catch(function(err) {
+            status.innerText = "Fehler: Kein Kamerazugriff";
+        });
 
-    async function initScanner() {
-        videoElement = document.getElementById("videoElement");
-        canvasElement = document.createElement("canvas");
-        canvasContext = canvasElement.getContext("2d", { willReadFrequently: true });
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            videoElement.srcObject = stream;
-            
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            isScanning = true;
-            
-            videoElement.onloadedmetadata = () => {
-                videoElement.play(); 
-                scanLoop(); 
-            };
-        } catch (err) {
-            document.getElementById("status").innerText = "Kamerafehler: " + err.message;
-        }
-
-        if (!navigator.share) {
-            document.getElementById('shareBtn').style.display = 'none';
-        }
-    }
-
-    async function scanLoop() {
-        while (isScanning) {
-            await new Promise(resolve => setTimeout(resolve, 30));
-
-            if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-                canvasElement.width = videoElement.videoWidth;
-                canvasElement.height = videoElement.videoHeight;
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && scanning) {
+                const canvas = document.createElement("canvas");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
-                
-                try {
-                    let symbols = await zbarWasm.scanImageData(imageData);
-                    
-                    if (symbols && symbols.length > 0) {
-                        let decodedText = symbols[0].decode();
-                        onScanSuccess(decodedText);
-                    }
-                } catch (error) {
-                    console.error("ZBar Fehler: ", error);
+                // jsQR scannt das Bild
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (code) {
+                    processQRCode(code.data);
                 }
             }
-        }
-    }
-
-    function calculateLiveFPS() {
-        const now = performance.now();
-        scanTimestamps.push(now);
-        scanTimestamps = scanTimestamps.filter(t => now - t <= 2000);
-        
-        let currentFps = 0;
-        if (scanTimestamps.length > 1) {
-            const timeDiffSeconds = (now - scanTimestamps[0]) / 1000;
-            currentFps = (scanTimestamps.length - 1) / timeDiffSeconds;
-        }
-        document.getElementById("fpsCounter").innerText = `Scan-Rate: ${currentFps.toFixed(1)} FPS`;
-    }
-
-    function buildLiveMatrix(totalFrames) {
-        const container = document.getElementById("matrixContainer");
-        container.innerHTML = "";
-        for (let i = 1; i <= totalFrames; i++) {
-            const box = document.createElement("div");
-            box.id = `matrix-box-${i}`;
-            box.className = "matrix-box";
-            box.innerText = i;
-            container.appendChild(box);
-        }
-    }
-
-    function onScanSuccess(decodedText) {
-        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
-        if (!protocolMatch) return; 
-
-        calculateLiveFPS();
-
-        const currentFrame = parseInt(protocolMatch[1]);
-        const totalFrames = parseInt(protocolMatch[2]);
-        const frameMode = protocolMatch[3];
-        const payload = protocolMatch[4];
-
-        if (totalChunksCount !== totalFrames) {
-            totalChunksCount = totalFrames;
-            receivedChunks = {};
-            streamMode = frameMode; 
-            scanTimestamps = [];
-            buildLiveMatrix(totalFrames);
-        }
-
-        if (!receivedChunks[currentFrame]) {
-            receivedChunks[currentFrame] = payload;
-            
-            const box = document.getElementById(`matrix-box-${currentFrame}`);
-            if (box) box.classList.add("loaded");
-            
-            const receivedCount = Object.keys(receivedChunks).length;
-            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
-
-            if (receivedCount === totalFrames) {
-                assembleAndCheckEncryption();
+            if (scanning) {
+                requestAnimationFrame(tick);
             }
         }
-    }
 
-    function assembleAndCheckEncryption() {
-        isScanning = false; 
-        document.getElementById("scanLaser").style.display = "none";
-        document.getElementById("scannerContainer").classList.add("minimized");
-        document.getElementById("status").style.display = "none";
-        document.getElementById("fpsCounter").style.display = "none";
-        document.getElementById("matrixContainer").style.display = "none";
+        // CSV-Erkenner und Markdown-Übersetzer
+        function formatIfCsv(text) {
+            const lines = text.trim().split('\n');
+            
+            // Regel 1: Mindestens 3 Zeilen
+            if (lines.length < 3) return text; 
+            
+            // Regel 2: Finde Trennzeichen
+            const separator = lines[0].includes(';') ? ';' : (lines[0].includes(',') ? ',' : null);
+            if (!separator) return text;
 
-        let fullAssembledString = "";
-        for (let i = 1; i <= totalChunksCount; i++) {
-            fullAssembledString += receivedChunks[i];
+            // Regel 3: Zähle Spalten
+            const expectedColumns = lines[0].split(separator).length;
+            if (expectedColumns < 2) return text;
+
+            // Regel 4: Strikte Prüfung über alle Zeilen
+            const isStrictCsv = lines.every(line => line.split(separator).length === expectedColumns);
+            
+            if (isStrictCsv) {
+                let markdownTable = "";
+                lines.forEach((line, index) => {
+                    const columns = line.split(separator).map(cell => cell.trim());
+                    markdownTable += "| " + columns.join(" | ") + " |\n";
+                    
+                    if (index === 0) {
+                        markdownTable += "|" + columns.map(() => "---").join("|") + "|\n";
+                    }
+                });
+                return markdownTable; // Gibt die Tabelle als sauberes Markdown zurück
+            }
+            
+            return text; // Keine CSV -> Original zurückgeben
         }
 
-        if (streamMode === 'EX' || streamMode === 'EM') {
-            encryptedPayloadBase64 = fullAssembledString;
-            document.getElementById("cardTypeHeader").innerText = "🔒 VERSCHLÜSSELTER EMPFANG";
-            document.getElementById("cardButtons").style.display = "none"; 
+        function processQRCode(data) {
+            scanning = false;
+            status.innerText = "Erfolgreich gescannt!";
             
-            document.getElementById("result-content").innerHTML = `
-                <div class="crypto-ui">
-                    <h2>Geschützte Daten</h2>
-                    <p>Dieser Stream ist mit einem PIN verschlüsselt. Bitte gib den Schlüssel ein, um den Text zu lesen.</p>
-                    <input type="password" id="receiverPin" placeholder="PIN eingeben">
-                    <button onclick="attemptDecryption()">Entschlüsseln 🔓</button>
-                    <p class="crypto-error" id="decryptError">Falscher PIN! Zugriff verweigert.</p>
-                </div>
-            `;
-            
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        } else {
-            processDecryptedData(fullAssembledString);
-        }
-    }
-
-    function attemptDecryption() {
-        const pin = document.getElementById("receiverPin").value;
-        try {
-            const bytes = CryptoJS.AES.decrypt(encryptedPayloadBase64, pin);
-            const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-            if (!decryptedString) throw new Error("Falscher PIN");
-            
-            document.getElementById("cardButtons").style.display = "flex";
-            processDecryptedData(decryptedString);
-        } catch (e) {
-            document.getElementById("decryptError").style.display = "block";
-            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-        }
-    }
-
-    function processDecryptedData(payloadString) {
-        let finalDecodedText = payloadString;
-
-        if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
             try {
-                finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
+                // HIER: Eventuelle Entschlüsselung / Dekomprimierung einfügen
+                // Beispiel (falls lz-string genutzt wurde):
+                // let decompressed = LZString.decompressFromBase64(data) || data;
+                
+                originalText = data; // Original in Variable sichern
+
+                // 1. Daten für die Anzeige vorbereiten (CSV checken)
+                let textForDisplay = formatIfCsv(originalText);
+
+                // 2. Roh-Ansicht abfüllen
+                viewRaw.innerText = originalText;
+
+                // 3. Markdown / Tabelle rendern
+                viewMarkdown.innerHTML = marked.parse(textForDisplay);
+
+                // UI aktualisieren
+                resultCard.style.display = "block";
+                
             } catch (e) {
-                document.getElementById("status").style.display = "block";
-                document.getElementById("status").innerText = "❌ Fehler bei der Dekompression!";
-                return;
+                alert("Fehler bei der Datenverarbeitung: " + e.message);
+                resetScanner();
             }
         }
-        
-        rawAssembledText = finalDecodedText; 
-        const contentArea = document.getElementById("result-content");
-        const headerArea = document.getElementById("cardTypeHeader");
-        const pdfBtn = document.getElementById("pdfBtn");
-        
-        // NEU: Logik zur vollautomatischen Ein-/Ausblendung des PDF-Buttons je nach Modus
-        if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
-            contentArea.innerHTML = marked.parse(finalDecodedText, { breaks: true });
-            headerArea.innerText = "📝 Empfang: Markdown Dokument";
-            pdfBtn.style.display = "flex"; // PDF-Option aktivieren
-        } else {
-            contentArea.innerText = finalDecodedText;
-            headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-            pdfBtn.style.display = "none"; // PDF-Option verstecken
+
+        // UI Tabs umschalten
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.content-view').forEach(view => view.classList.remove('active'));
+            
+            if (tab === 'markdown') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                viewMarkdown.classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                viewRaw.classList.add('active');
+            }
         }
 
-        renderMathInElement(contentArea, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false}
-            ],
-            throwOnError: false
-        });
-        
-        if (streamMode === 'TX' || streamMode === 'MD' || streamMode === 'CX' || streamMode === 'CM') {
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        // Rohtext in Zwischenablage kopieren (z.B. für Excel)
+        function copyRawText() {
+            navigator.clipboard.writeText(originalText).then(() => {
+                const btn = document.querySelector('.btn-primary');
+                const oldText = btn.innerText;
+                btn.innerText = "Kopiert! ✔️";
+                setTimeout(() => { btn.innerText = oldText; }, 2000);
+            });
         }
-    }
 
-    // NEU: Funktion zur Aktivierung des nativen, sauberen PDF-Exports
-    function exportToPDF() {
-        window.print();
-    }
-
-    function resetScanner() {
-        const card = document.getElementById("resultCard");
-        card.classList.remove("reveal");
-        
-        setTimeout(() => {
-            card.style.display = "none";
-            document.getElementById("scannerContainer").classList.remove("minimized");
-            document.getElementById("matrixContainer").style.display = "grid";
-            document.getElementById("matrixContainer").innerHTML = ""; 
-            document.getElementById("fpsCounter").style.display = "block"; 
-            document.getElementById("fpsCounter").innerText = "Scan-Rate: 0.0 FPS";
-            document.getElementById("status").style.display = "block";
-            document.getElementById("scanLaser").style.display = "block";
-            document.getElementById("cardButtons").style.display = "flex";
-            document.getElementById("pdfBtn").style.display = "none"; // Beim Reset ausblenden
-            
-            receivedChunks = {};
-            totalChunksCount = 0;
-            rawAssembledText = "";
-            encryptedPayloadBase64 = "";
-            scanTimestamps = [];
-            
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Kopieren 📋";
-            copyBtn.style.backgroundColor = "#0071e3";
-            
-            isScanning = true;
-            scanLoop();
-        }, 400);
-    }
-
-    function copyText() {
-        if (!rawAssembledText) return;
-        navigator.clipboard.writeText(rawAssembledText).then(() => {
-            const copyBtn = document.getElementById("copyBtn");
-            copyBtn.innerText = "Gesichert! ✓";
-            copyBtn.style.backgroundColor = "#34c759";
-            if (navigator.vibrate) navigator.vibrate(50);
-            setTimeout(() => {
-                copyBtn.innerText = "Kopieren 📋";
-                copyBtn.style.backgroundColor = "#0071e3";
-            }, 2000);
-        });
-    }
-
-    function shareText() {
-        if (!rawAssembledText || !navigator.share) return;
-        navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch((e) => {});
-    }
-
-    window.addEventListener('DOMContentLoaded', initScanner);
-</script>
-
+        // Scanner zurücksetzen
+        function resetScanner() {
+            resultCard.style.display = "none";
+            scanning = true;
+            status.innerText = "Suche QR-Code...";
+            requestAnimationFrame(tick);
+        }
+    </script>
 </body>
 </html>
