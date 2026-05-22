@@ -342,7 +342,7 @@
         
         // NEU: Logik zur vollautomatischen Ein-/Ausblendung des PDF-Buttons je nach Modus
         if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM') {
-            contentArea.innerHTML = marked.parse(finalDecodedText);
+            contentArea.innerHTML = marked.parse(finalDecodedText, { breaks: true });
             headerArea.innerText = "📝 Empfang: Markdown Dokument";
             pdfBtn.style.display = "flex"; // PDF-Option aktivieren
         } else {
