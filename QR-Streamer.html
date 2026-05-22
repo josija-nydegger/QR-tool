@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>QR-Code Datenüberträger (Sender - Kino & Shuffle)</title>
+    <title>QR-Code Datenüberträger (Sender - Krypto, Shuffle & vCard)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -12,7 +12,7 @@
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         label { font-weight: 600; display: block; margin-top: 15px; margin-bottom: 5px; }
         
-        .mode-selector { display: flex; gap: 10px; margin-bottom: 10px; }
+        .mode-selector { display: flex; gap: 10px; margin-bottom: 15px; }
         .mode-btn { flex: 1; padding: 10px; background-color: #e5e5ea; border: none; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; }
         .mode-btn.active { background-color: #0071e3; color: white; }
 
@@ -25,13 +25,17 @@
         .btn-clear:hover { opacity: 0.7; }
         #textStats { font-size: 13px; color: #86868b; font-weight: 500; }
 
-        .pin-container { margin-top: 15px; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; }
+        /* vCard Formular Styling */
+        .vcard-form { display: none; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; margin-bottom: 15px; }
+        .vcard-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .vcard-row div { flex: 1; }
+        .vcard-form input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
+
+        .pin-container { margin-top: 15px; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; margin-bottom: 15px; }
         .pin-container label { margin-top: 0; color: #1d1d1f; }
         
         .pin-input-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
         .pin-input-wrapper input { width: 100%; box-sizing: border-box; padding: 10px 40px 10px 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 16px; font-family: monospace; letter-spacing: 2px; }
-        input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
-        input[type="password"]::-webkit-credentials-auto-fill-button { visibility: hidden; }
         
         .eye-btn { position: absolute; right: 5px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; padding: 8px; }
         .eye-btn:hover { opacity: 1; }
@@ -39,7 +43,7 @@
         .remember-pin-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #86868b; cursor: pointer; margin: 0; }
         .remember-pin-label input { width: 16px; height: 16px; cursor: pointer; }
 
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .controls-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         select, input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
         
         .action-buttons { display: flex; gap: 10px; margin-top: 20px; }
@@ -64,47 +68,80 @@
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Krypto & Shuffle)</h1>
+    <h1>QR-Streamer (Krypto & vCard)</h1>
     
-    <label>Text-Modus:</label>
+    <label>Sende-Modus:</label>
     <div class="mode-selector">
-        <button id="btnText" class="mode-btn active" onclick="setMode('TX')">Raw Text (Reintext)</button>
-        <button id="btnMarkdown" class="mode-btn" onclick="setMode('MD')">Markdown Text</button>
+        <button id="btnText" class="mode-btn active" onclick="setMode('TX')">Text</button>
+        <button id="btnMarkdown" class="mode-btn" onclick="setMode('MD')">Markdown</button>
+        <button id="btnVCard" class="mode-btn" onclick="setMode('VC')">📇 vCard Visitenkarte</button>
     </div>
     
-    <textarea id="textInput" placeholder="Tippe hier, füge Text ein oder ziehe eine Datei direkt in dieses Feld..." oninput="updateStats()"></textarea>
-    
-    <div class="textarea-footer">
-        <button class="btn-clear" onclick="clearText()">Leeren 🗑️</button>
-        <div id="textStats">0 Wörter, 0 Bytes (Komprimiert: 0 Bytes)</div>
-    </div>
-    
-    <div class="pin-container">
-        <label for="pinInput">🔒 Verschlüsselung (Optional):</label>
-        
-        <div class="pin-input-wrapper">
-            <input type="password" id="pinInput" placeholder="Geheimer PIN (z.B. 1234)">
-            <button class="eye-btn" id="eyeToggle" onclick="togglePinVisibility()">👁️</button>
+    <div id="standardTextGroup">
+        <textarea id="textInput" placeholder="Tippe hier, füge Text ein oder ziehe eine Datei direkt in dieses Feld..." oninput="updateStats()"></textarea>
+        <div class="textarea-footer">
+            <button class="btn-clear" onclick="clearText()">Leeren 🗑️</button>
+            <div id="textStats">0 Wörter, 0 Bytes (Komprimiert: 0 Bytes)</div>
         </div>
+    </div>
 
-        <label class="remember-pin-label">
-            <input type="checkbox" id="rememberPin">
-            PIN für diese Sitzung merken
-        </label>
-    </div>
-    
-    <div class="controls">
-        <div>
-            <label for="chunkSize">Paketgrösse:</label>
-            <select id="chunkSize">
-                <option value="60">Sehr sicher (60 Zeichen)</option>
-                <option value="150">Normal (150 Zeichen)</option>
-                <option value="300" selected>Gross (300 Zeichen - Sweet Spot)</option>
-            </select>
+    <div id="vCardFormGroup" class="vcard-form">
+        <div class="vcard-row">
+            <div>
+                <label style="margin-top:0;">Vorname:</label>
+                <input type="text" id="vcVorname" placeholder="Max">
+            </div>
+            <div>
+                <label style="margin-top:0;">Nachname:</label>
+                <input type="text" id="vcNachname" placeholder="Mustermann">
+            </div>
+        </div>
+        <div class="vcard-row">
+            <div>
+                <label style="margin-top:0;">Telefonnummer:</label>
+                <input type="text" id="vcTelefon" placeholder="+41 79 123 45 67">
+            </div>
+            <div>
+                <label style="margin-top:0;">E-Mail:</label>
+                <input type="text" id="vcEmail" placeholder="max@muster.ch">
+            </div>
         </div>
         <div>
-            <label for="fps">Geschwindigkeit (FPS):</label>
-            <input type="number" id="fps" value="15" min="1" max="30">
+            <label style="margin-top:5px;">Firma / Organisation:</label>
+            <input type="text" id="vcFirma" placeholder="Musterfirma GmbH">
+        </div>
+        
+        <div class="textarea-footer" style="margin-top: 15px; border-top: 1px solid #e5e5ea; padding-top: 10px;">
+            <button class="btn-clear" onclick="clearVCard()">Formular leeren 🗑️</button>
+        </div>
+    </div>
+    
+    <div id="cryptoAndControlsGroup">
+        <div class="pin-container">
+            <label for="pinInput">🔒 Verschlüsselung (Optional):</label>
+            <div class="pin-input-wrapper">
+                <input type="password" id="pinInput" placeholder="Geheimer PIN (z.B. 1234)">
+                <button class="eye-btn" id="eyeToggle" onclick="togglePinVisibility()">👁️</button>
+            </div>
+            <label class="remember-pin-label">
+                <input type="checkbox" id="rememberPin">
+                PIN für diese Sitzung merken
+            </label>
+        </div>
+        
+        <div class="controls-wrapper">
+            <div>
+                <label for="chunkSize">Paketgrösse:</label>
+                <select id="chunkSize">
+                    <option value="60">Sehr sicher (60 Zeichen)</option>
+                    <option value="150">Normal (150 Zeichen)</option>
+                    <option value="300" selected>Gross (300 Zeichen - Sweet Spot)</option>
+                </select>
+            </div>
+            <div>
+                <label for="fps">Geschwindigkeit (FPS):</label>
+                <input type="number" id="fps" value="15" min="1" max="30">
+            </div>
         </div>
     </div>
     
@@ -123,15 +160,11 @@
 <script>
     let animationInterval = null;
     let frames = []; 
-    
-    // NEU: Variablen für die Shuffle-Logik
     let playbackSequence = [];
     let sequenceIndex = 0;
     let isShuffling = false;
-
     let currentMode = 'TX';
 
-    // Fisher-Yates Shuffle Algorithmus
     function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -142,6 +175,20 @@
     function clearText() {
         document.getElementById('textInput').value = "";
         updateStats();
+    }
+
+    // NEU: Funktion um alle vCard Eingabefelder blitzschnell zu leeren
+    function clearVCard() {
+        document.getElementById("vcVorname").value = "";
+        document.getElementById("vcNachname").value = "";
+        document.getElementById("vcTelefon").value = "";
+        document.getElementById("vcEmail").value = "";
+        document.getElementById("vcFirma").value = "";
+        
+        // Falls gerade eine Visitenkarte gestreamt wird, brechen wir den Stream ab
+        if (currentMode === 'VC' && document.getElementById("stopBtn").style.display === "block") {
+            stopStreaming();
+        }
     }
 
     function togglePinVisibility() {
@@ -176,6 +223,27 @@
         currentMode = mode;
         document.getElementById("btnText").classList.toggle("active", mode === 'TX');
         document.getElementById("btnMarkdown").classList.toggle("active", mode === 'MD');
+        document.getElementById("btnVCard").classList.toggle("active", mode === 'VC');
+
+        const txtGroup = document.getElementById("standardTextGroup");
+        const vcFormGroup = document.getElementById("vCardFormGroup");
+        const controlsGroup = document.getElementById("cryptoAndControlsGroup");
+        const btnKino = document.querySelector(".btn-kino");
+
+        if (mode === 'VC') {
+            txtGroup.style.display = "none";
+            vcFormGroup.style.display = "block";
+            controlsGroup.style.display = "none";
+            btnKino.style.display = "none"; 
+        } else {
+            txtGroup.style.display = "block";
+            vcFormGroup.style.display = "none";
+            controlsGroup.style.display = "grid";
+            btnKino.style.display = "block";
+        }
+        
+        // Beim Moduswechsel den alten QR-Code sicherheitshalber löschen
+        if (animationInterval) stopStreaming();
     }
 
     function updateStats() {
@@ -205,7 +273,47 @@
         return chunks;
     }
 
+    function buildVCardString() {
+        const vorname = document.getElementById("vcVorname").value.trim();
+        const nachname = document.getElementById("vcNachname").value.trim();
+        const telefon = document.getElementById("vcTelefon").value.trim();
+        const email = document.getElementById("vcEmail").value.trim();
+        const firma = document.getElementById("vcFirma").value.trim();
+
+        if (!vorname && !nachname) {
+            alert("Bitte gib mindestens einen Vor- oder Nachnamen ein.");
+            return null;
+        }
+
+        let vcard = "BEGIN:VCARD\nVERSION:3.0\n";
+        vcard += `N:${nachname};${vorname};;;\n`;
+        vcard += `FN:${vorname} ${nachname}\n`;
+        if (firma) vcard += `ORG:${firma}\n`;
+        if (telefon) vcard += `TEL;TYPE=CELL:${telefon}\n`;
+        if (email) vcard += `EMAIL;TYPE=PREF,INTERNET:${email}\n`;
+        vcard += "END:VCARD";
+        return vcard;
+    }
+
     function startStreaming(useKinoMode) {
+        if (animationInterval) clearInterval(animationInterval);
+        frames = [];
+
+        const qr = new QRious({ size: 800, level: 'M' }); 
+
+        if (currentMode === 'VC') {
+            const vCardString = buildVCardString();
+            if (!vCardString) return;
+
+            document.getElementById("status").innerText = "Visitenkarte aktiv. Scanne mit der normalen Handy-Kamera!";
+            document.getElementById("actionBtns").style.display = "none";
+            document.getElementById("stopBtn").style.display = "block";
+
+            qr.value = vCardString;
+            document.getElementById("qr-image").src = qr.toDataURL();
+            return;
+        }
+
         let rawText = document.getElementById("textInput").value;
         let pinInput = document.getElementById("pinInput");
         let pin = pinInput.value;
@@ -240,9 +348,7 @@
         const textChunks = chunkText(finalPayloadText, maxChunkSize);
         const totalChunks = textChunks.length;
 
-        frames = []; 
-        const qr = new QRious({ size: 800, level: 'L' });
-
+        qr.level = 'L'; 
         for (let i = 0; i < totalChunks; i++) {
             const frameNumber = i + 1;
             const paddedCurrent = String(frameNumber).padStart(3, '0');
@@ -253,37 +359,27 @@
             frames.push(qr.toDataURL());
         }
 
-        // NEU: Initiale Reihenfolge aufbauen (0, 1, 2, 3...)
         playbackSequence = Array.from({length: totalChunks}, (_, i) => i);
         sequenceIndex = 0;
         isShuffling = false;
 
-        if (animationInterval) clearInterval(animationInterval);
-
         animationInterval = setInterval(() => {
-            // Hole den tatsächlichen Frame-Index aus unserer Playlist
             let actualFrameIndex = playbackSequence[sequenceIndex];
-            
             document.getElementById("qr-image").src = frames[actualFrameIndex];
             
             let statusText = `Sende Frame ${actualFrameIndex + 1} von ${totalChunks} (${fps} Hz) [Modus: ${transmitMode}]`;
             if (transmitMode === 'EX' || transmitMode === 'EM') statusText += " 🔒"; 
             if (useKinoMode) statusText += " (Klick zum Beenden)";
-            
-            // Zeige an, wenn der Shuffle-Modus aktiv ist
             if (isShuffling) statusText += " 🔀";
             
             document.getElementById("status").innerText = statusText;
-            
             sequenceIndex++;
             
-            // Wenn die Playlist am Ende ist, mischen und von vorne anfangen!
             if (sequenceIndex >= totalChunks) {
                 sequenceIndex = 0;
                 isShuffling = true;
                 shuffleArray(playbackSequence);
             }
-            
         }, 1000 / fps);
 
         if (useKinoMode) {
@@ -301,6 +397,7 @@
         document.getElementById("actionBtns").style.display = "flex";
         document.getElementById("stopBtn").style.display = "none";
         document.getElementById("status").innerText = "Stream gestoppt";
+        document.getElementById("qr-image").src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
         
         document.body.classList.remove('kino-mode');
         if (document.fullscreenElement && document.exitFullscreen) {
