@@ -376,6 +376,7 @@
     function processDecryptedData(payloadString) {
         let finalDecodedText = payloadString;
 
+        // Dekompression falls nötig
         if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
             try {
                 finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
@@ -392,11 +393,14 @@
         const headerArea = document.getElementById("cardTypeHeader");
         const pdfBtn = document.getElementById("pdfBtn");
         
-        // CSV prüfen und ggf. umwandeln
-        let textForDisplay = formatIfCsv(finalDecodedText);
-        let isCsv = (textForDisplay !== finalDecodedText);
+        // NEU: Nur formatieren, wenn der SENDER auch Markdown (MD, CM, EM) gewählt hat!
+        const isMarkdownMode = ['MD', 'CM', 'EM'].includes(streamMode);
         
-        if (streamMode === 'MD' || streamMode === 'CM' || streamMode === 'EM' || isCsv) {
+        if (isMarkdownMode) {
+            // Markdown-Modus: CSV ausführen, HTML rendern und KaTeX aktivieren
+            let textForDisplay = formatIfCsv(finalDecodedText);
+            let isCsv = (textForDisplay !== finalDecodedText);
+            
             contentArea.innerHTML = marked.parse(textForDisplay, { breaks: true });
             
             if (isCsv) {
@@ -404,22 +408,29 @@
             } else {
                 headerArea.innerText = "📝 Empfang: Markdown Dokument";
             }
-            pdfBtn.style.display = "flex"; 
+            
+            pdfBtn.style.display = "flex"; // PDF-Export erlauben
+            contentArea.style.whiteSpace = "normal"; // Zeilenumbruch normal
+            
+            renderMathInElement(contentArea, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false
+            });
+            
         } else {
-            contentArea.innerText = finalDecodedText;
+            // Text-Modus (TX, CX, EX): Strikt roher Text, keine Formatierung, kein PDF
+            contentArea.innerText = finalDecodedText; // Nutzt innerText für XSS-Sicherheit und Raw-Feeling
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-            pdfBtn.style.display = "none"; 
+            
+            pdfBtn.style.display = "none"; // PDF-Export ausblenden
+            contentArea.style.whiteSpace = "pre-wrap"; // Wichtig, damit Zeilenumbrüche im Code/CSV schön bleiben
         }
 
-        renderMathInElement(contentArea, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false}
-            ],
-            throwOnError: false
-        });
-        
-        if (streamMode === 'TX' || streamMode === 'MD' || streamMode === 'CX' || streamMode === 'CM') {
+        // Anzeige einblenden
+        if (['TX', 'MD', 'CX', 'CM'].includes(streamMode)) {
             const card = document.getElementById("resultCard");
             card.style.display = "block";
             setTimeout(() => { card.classList.add("reveal"); }, 50);
