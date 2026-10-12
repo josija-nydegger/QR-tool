@@ -7,7 +7,7 @@
          d.h. selbst eingeschleuster Code könnte empfangene Daten nicht per fetch/XHR wegschicken. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
     <meta name="referrer" content="no-referrer">
-    <title>QR-Code Datenüberträger (ZBar WASM-Edition)</title>
+    <title>QR-Code Datenüberträger (Fountain-Empfänger)</title>
 
     <!-- Alle Bibliotheken mit fester Version + Integritäts-Hash (SRI): wird eine Datei auf dem CDN
          verändert, verweigert der Browser die Ausführung. Vorher: "@latest" ohne Prüfung. -->
@@ -15,11 +15,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js" integrity="sha384-EbGJzkj+gTEnDjpWZJGfQ2RXHaIdm5zLuvFqtJI6cdAsjM8VxIIdmx8YG+Qhw1Hn" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js" integrity="sha384-QsSpx6a0USazT7nK7w8qXDgpSAPhFsb2XtpoLFQ5+X2yFN6hvCKnwEzN8M5FWaJb" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-GvrOXuhMATgEsSwCs4smul74iXGOixntILdUW9XmUC6+HX0sLNAK3q71HotJqlAn" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" integrity="sha384-cpW21h6RZv/phavutF+AuVYrr+dA8xD9zs6FwLpaCct6O9ctzYFfFr4dgmgccOTx" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
-    <!-- CryptoJS entfernt: Entschlüsselung läuft jetzt über die eingebaute Web Crypto API des Browsers -->
+    <!-- Entschlüsselung (Web Crypto) und Dekompression (DecompressionStream) sind im Browser eingebaut -->
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; padding: 15px; margin: 0; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
@@ -120,7 +119,7 @@
 <body>
 
 <div class="container">
-    <h1>QR-Receiver (WASM)</h1>
+    <h1>QR-Receiver (Fountain)</h1>
     
     <div class="scanner-wrapper" id="scannerContainer">
         <video id="videoElement" muted autoplay playsinline></video>
@@ -137,7 +136,7 @@
     <div id="status">Warte auf Kamera-Freigabe...</div>
     
     <div class="matrix-container" id="matrixContainer"></div>
-    <div id="fpsCounter">Scan-Rate: 0.0 FPS</div>
+    <div id="fpsCounter">Pakete: 0.0/s · 0.0 KB/s</div>
     
     <div class="result-card" id="resultCard">
         <div class="card-header" id="cardTypeHeader">Empfangene Daten</div>
@@ -153,22 +152,276 @@
 </div>
 
 <script>
-    // ===== Protokoll v2 =====
-    // Header: [Frame]/[Total]|[Modus]|[Stream-ID]|[Daten]
-    // Ältere Sender ohne Stream-ID werden für unverschlüsselte Streams weiterhin akzeptiert.
-    const PBKDF2_ITERATIONS = 600000;
-    const ALLOWED_MODES = ['TX', 'MD', 'CX', 'CM', 'EX', 'EM'];
-    const MAX_FRAMES = 9999;
-    const FRAME_REGEX = /^(\d{1,5})\/(\d{1,5})\|([A-Z]{2})\|(?:([0-9a-z]{4})\|)?([\s\S]*)$/;
+    // ======================================================================
+    // QR-Tool Kern (Protokoll v3) – identisch in Sender und Reader
+    // ----------------------------------------------------------------------
+    // QR-Inhalt:  "QR3:" + Base45( Header[20] | Block[S] )
+    // Header:     0     Version (3)
+    //             1     Flags (Bit0 = Markdown, Bit1 = verschlüsselt)
+    //             2-5   Stream-ID (zufällig)
+    //             6-9   Datenlänge L in Bytes
+    //             10-11 Blockgrösse S in Bytes
+    //             12-15 Paketnummer
+    //             16-19 Prüfsumme (erste 4 Bytes SHA-256 der Daten)
+    // Daten:      Deflate(UTF-8-Text), optional danach AES-256-GCM
+    // Fountain:   Paket 0..K-1 = Block 0..K-1 direkt (systematisch),
+    //             ab Paket K = zufällige XOR-Kombination aller Blöcke.
+    //             Der Empfänger löst per Gauss-Elimination (GF(2)) und
+    //             braucht dadurch nur ~K+2 beliebige Pakete.
+    // ======================================================================
+    const QRT = (() => {
+        const PREFIX = "QR3:";
+        const VERSION = 3;
+        const HEADER_LEN = 20;
+        const FLAG_MARKDOWN = 1, FLAG_ENCRYPTED = 2;
+        const PBKDF2_ITERATIONS = 600000;
+        const B45 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        const B45_LOOKUP = new Int16Array(128).fill(-1);
+        for (let i = 0; i < B45.length; i++) B45_LOOKUP[B45.charCodeAt(i)] = i;
 
-    let receivedChunks = new Map();
-    let totalChunksCount = 0;
-    let currentStreamKey = null;
-    let streamMode = 'TX';
-    let isLegacyStream = false;
+        // ---------- Base45 (RFC 9285): passt in den dichten QR-Alphanumerik-Modus ----------
+        function base45Encode(bytes) {
+            let out = "";
+            for (let i = 0; i + 1 < bytes.length; i += 2) {
+                const n = bytes[i] * 256 + bytes[i + 1];
+                out += B45[n % 45] + B45[Math.floor(n / 45) % 45] + B45[Math.floor(n / 2025)];
+            }
+            if (bytes.length % 2) {
+                const n = bytes[bytes.length - 1];
+                out += B45[n % 45] + B45[Math.floor(n / 45)];
+            }
+            return out;
+        }
+
+        function base45Decode(str) {
+            const len = str.length;
+            if (len % 3 === 1) throw new Error("Base45: ungültige Länge");
+            const out = new Uint8Array(Math.floor(len / 3) * 2 + (len % 3 === 2 ? 1 : 0));
+            let o = 0;
+            for (let i = 0; i < len; i += 3) {
+                const c = B45_LOOKUP[str.charCodeAt(i)], d = B45_LOOKUP[str.charCodeAt(i + 1)];
+                if (c < 0 || d < 0) throw new Error("Base45: ungültiges Zeichen");
+                if (i + 2 < len) {
+                    const e = B45_LOOKUP[str.charCodeAt(i + 2)];
+                    if (e < 0) throw new Error("Base45: ungültiges Zeichen");
+                    const n = c + d * 45 + e * 2025;
+                    if (n > 0xFFFF) throw new Error("Base45: Überlauf");
+                    out[o++] = n >> 8; out[o++] = n & 0xFF;
+                } else {
+                    const n = c + d * 45;
+                    if (n > 0xFF) throw new Error("Base45: Überlauf");
+                    out[o++] = n;
+                }
+            }
+            return out;
+        }
+
+        // ---------- Pseudozufall: deterministisch aus Stream-ID + Paketnummer ----------
+        function mulberry32(seed) {
+            return function () {
+                seed = (seed + 0x6D2B79F5) >>> 0;
+                let t = seed;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return (t ^ (t >>> 14)) >>> 0;
+            };
+        }
+
+        // Welche Blöcke stecken in Paket "index"? (Bitmaske über K Blöcke)
+        function coefficients(streamId, index, K) {
+            const words = new Uint32Array(Math.ceil(K / 32));
+            if (index < K) {
+                words[index >>> 5] = 1 << (index & 31);
+                return words;
+            }
+            const rnd = mulberry32((streamId ^ Math.imul(index, 0x9E3779B1)) >>> 0);
+            for (let w = 0; w < words.length; w++) words[w] = rnd();
+            const rest = K & 31;
+            if (rest) words[words.length - 1] &= (1 << rest) - 1 >>> 0;
+            if (words.every(v => v === 0)) { const b = index % K; words[b >>> 5] = 1 << (b & 31); }
+            return words;
+        }
+
+        function xorInto(target, source) {
+            for (let i = 0; i < target.length; i++) target[i] ^= source[i];
+        }
+
+        // ---------- Prüfsumme & Header ----------
+        async function checksum(bytes) {
+            const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+            return ((h[0] << 24) | (h[1] << 16) | (h[2] << 8) | h[3]) >>> 0;
+        }
+
+        function writeHeader(view, { flags, streamId, length, blockSize, index, sum }) {
+            view.setUint8(0, VERSION);
+            view.setUint8(1, flags);
+            view.setUint32(2, streamId);
+            view.setUint32(6, length);
+            view.setUint16(10, blockSize);
+            view.setUint32(12, index);
+            view.setUint32(16, sum);
+        }
+
+        function parsePacket(text) {
+            if (typeof text !== "string" || !text.startsWith(PREFIX)) return null;
+            let bytes;
+            try { bytes = base45Decode(text.slice(PREFIX.length)); } catch (e) { return null; }
+            if (bytes.length < HEADER_LEN + 1) return null;
+            const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            if (v.getUint8(0) !== VERSION) return null;
+            const p = {
+                flags: v.getUint8(1),
+                streamId: v.getUint32(2),
+                length: v.getUint32(6),
+                blockSize: v.getUint16(10),
+                index: v.getUint32(12),
+                sum: v.getUint32(16),
+                data: bytes.subarray(HEADER_LEN)
+            };
+            if (p.blockSize < 1 || p.data.length !== p.blockSize) return null;
+            if (p.length < 1 || p.length > 50 * 1024 * 1024) return null;
+            p.K = Math.ceil(p.length / p.blockSize);
+            return p;
+        }
+
+        // ---------- Encoder (Sender) ----------
+        class FountainEncoder {
+            constructor(data, { blockSize, flags, streamId, sum }) {
+                this.length = data.length;
+                this.blockSize = blockSize;
+                this.K = Math.ceil(data.length / blockSize);
+                this.flags = flags; this.streamId = streamId; this.sum = sum;
+                this.blocks = [];
+                for (let i = 0; i < this.K; i++) {
+                    const b = new Uint8Array(blockSize); // letzter Block mit Nullen aufgefüllt
+                    b.set(data.subarray(i * blockSize, Math.min(data.length, (i + 1) * blockSize)));
+                    this.blocks.push(b);
+                }
+            }
+            packet(index) {
+                const buf = new Uint8Array(HEADER_LEN + this.blockSize);
+                writeHeader(new DataView(buf.buffer), { flags: this.flags, streamId: this.streamId, length: this.length, blockSize: this.blockSize, index, sum: this.sum });
+                const body = buf.subarray(HEADER_LEN);
+                const coef = coefficients(this.streamId, index, this.K);
+                for (let w = 0; w < coef.length; w++) {
+                    let bits = coef[w];
+                    while (bits) {
+                        const low = bits & -bits;
+                        xorInto(body, this.blocks[w * 32 + (31 - Math.clz32(low))]);
+                        bits ^= low;
+                    }
+                }
+                return PREFIX + base45Encode(buf);
+            }
+        }
+
+        // ---------- Decoder (Empfänger): inkrementelle Gauss-Elimination über GF(2) ----------
+        class FountainDecoder {
+            constructor(p) {
+                this.streamId = p.streamId; this.flags = p.flags; this.length = p.length;
+                this.blockSize = p.blockSize; this.sum = p.sum; this.K = p.K;
+                this.rows = new Array(this.K).fill(null); // rows[pivot] = { coef, data }
+                this.rank = 0;
+                this.seen = new Set();
+                this.packetsUsed = 0;
+            }
+            matches(p) {
+                return p.streamId === this.streamId && p.length === this.length && p.blockSize === this.blockSize && p.flags === this.flags && p.sum === this.sum;
+            }
+            // Gibt die neu "belegte" Blocknummer zurück, oder -1 wenn das Paket nichts Neues brachte
+            add(p) {
+                if (this.seen.has(p.index)) return -1;
+                this.seen.add(p.index);
+                if (this.rank === this.K) return -1;
+                const coef = coefficients(this.streamId, p.index, this.K);
+                const data = new Uint8Array(p.data);
+                for (let w = 0; w < coef.length; w++) {
+                    while (coef[w]) {
+                        const pivot = w * 32 + (31 - Math.clz32(coef[w] & -coef[w]));
+                        const row = this.rows[pivot];
+                        if (!row) {
+                            this.rows[pivot] = { coef, data };
+                            this.rank++;
+                            this.packetsUsed++;
+                            return pivot;
+                        }
+                        xorInto(coef, row.coef); // Zeile hat nur Bits >= pivot
+                        xorInto(data, row.data);
+                    }
+                }
+                return -1; // linear abhängig
+            }
+            isComplete() { return this.rank === this.K; }
+            // Rückwärts-Einsetzen: höchster Pivot zuerst
+            result() {
+                const K = this.K, S = this.blockSize;
+                const blocks = new Array(K);
+                for (let p = K - 1; p >= 0; p--) {
+                    const { coef, data } = this.rows[p];
+                    const out = new Uint8Array(data);
+                    for (let w = p >>> 5; w < coef.length; w++) {
+                        let bits = coef[w];
+                        while (bits) {
+                            const low = bits & -bits;
+                            const q = w * 32 + (31 - Math.clz32(low));
+                            if (q > p) xorInto(out, blocks[q]);
+                            bits ^= low;
+                        }
+                    }
+                    blocks[p] = out;
+                }
+                const all = new Uint8Array(K * S);
+                blocks.forEach((b, i) => all.set(b, i * S));
+                return all.subarray(0, this.length);
+            }
+        }
+
+        // ---------- Kompression (eingebaut im Browser) ----------
+        async function pipe(bytes, stream) {
+            const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+            return new Uint8Array(await out.arrayBuffer());
+        }
+        function hasCompression() { return typeof CompressionStream === "function" && typeof DecompressionStream === "function"; }
+        const deflate = bytes => pipe(bytes, new CompressionStream("deflate-raw"));
+        const inflate = bytes => pipe(bytes, new DecompressionStream("deflate-raw"));
+
+        // ---------- Verschlüsselung: PBKDF2-SHA256 + AES-256-GCM ----------
+        async function deriveKey(passphrase, salt, usage) {
+            const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+                base, { name: "AES-GCM", length: 256 }, false, [usage]);
+        }
+        async function encrypt(bytes, passphrase) {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(passphrase, salt, "encrypt");
+            const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes));
+            const out = new Uint8Array(28 + cipher.length);
+            out.set(salt, 0); out.set(iv, 16); out.set(cipher, 28);
+            return out;
+        }
+        async function decrypt(bytes, passphrase) {
+            if (bytes.length < 28 + 16) throw new Error("Daten zu kurz");
+            const key = await deriveKey(passphrase, bytes.slice(0, 16), "decrypt");
+            return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(16, 28) }, key, bytes.slice(28)));
+        }
+
+        return { PREFIX, FLAG_MARKDOWN, FLAG_ENCRYPTED, HEADER_LEN, base45Encode, base45Decode, checksum, parsePacket,
+                 FountainEncoder, FountainDecoder, hasCompression, deflate, inflate, encrypt, decrypt };
+    })();
+
+
+    // Alte Formate (v1/v2: "001/005|CM|...") nur noch erkennen, um einen Hinweis zu zeigen
+    const LEGACY_REGEX = /^\d{1,5}\/\d{1,5}\|[A-Z]{2}\|/;
+
+    let decoder = null;
     let rawAssembledText = "";
-    let encryptedPayloadBase64 = "";
+    let encryptedPayload = null;
+    let isMarkdownStream = false;
     let scanTimestamps = [];
+    let packetCount = 0;
+    let legacyWarned = false;
+    let receptionDone = false; // nach Abschluss keine Pakete mehr annehmen (bis "Neu scannen")
 
     let videoElement = null;
     let canvasElement = null;
@@ -183,8 +436,9 @@
 
     async function startCamera() {
         try {
+            // Höhere Auflösung, damit auch grosse Pakete und mehrere Codes pro Bild lesbar sind
             mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+                video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
             });
             videoElement.srcObject = mediaStream;
             setStatus("Bereit. Richte die Kamera auf den QR-Stream.");
@@ -200,13 +454,13 @@
         }
     }
 
-    // Kamera nach erfolgreichem Empfang wirklich ausschalten (vorher lief sie im Hintergrund weiter)
+    // Kamera nach erfolgreichem Empfang wirklich ausschalten
     function stopCamera() {
         if (mediaStream) {
             mediaStream.getTracks().forEach(t => t.stop());
             mediaStream = null;
         }
-        videoElement.srcObject = null;
+        if (videoElement) videoElement.srcObject = null;
     }
 
     async function initScanner() {
@@ -217,8 +471,12 @@
         if (!navigator.share) {
             document.getElementById('shareBtn').style.display = 'none';
         }
-        if (typeof zbarWasm === "undefined" || typeof LZString === "undefined" || typeof DOMPurify === "undefined") {
+        if (typeof zbarWasm === "undefined" || typeof DOMPurify === "undefined") {
             setStatus("❌ Bibliotheken konnten nicht geladen werden (offline oder blockiert).");
+            return;
+        }
+        if (!QRT.hasCompression() || !window.crypto || !crypto.subtle) {
+            setStatus("❌ Browser zu alt: bitte iOS 16.4+ bzw. aktuelles Chrome/Firefox verwenden.");
             return;
         }
         await startCamera();
@@ -229,10 +487,9 @@
         scanLoopRunning = true;
         try {
             while (isScanning) {
-                await new Promise(resolve => setTimeout(resolve, 30));
+                await new Promise(resolve => setTimeout(resolve, 15));
 
                 if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-                    // Canvas nur bei Grössenänderung neu dimensionieren (spart Zeit pro Frame)
                     if (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight) {
                         canvasElement.width = videoElement.videoWidth;
                         canvasElement.height = videoElement.videoHeight;
@@ -242,12 +499,10 @@
 
                     try {
                         const symbols = await zbarWasm.scanImageData(imageData);
-                        if (symbols && symbols.length > 0) {
-                            // Alle erkannten Codes im Bild verarbeiten, nicht nur den ersten
-                            for (const sym of symbols) {
-                                if (!isScanning) break;
-                                onScanSuccess(sym.decode("utf-8"));
-                            }
+                        // Alle Codes im Bild verarbeiten (Sender kann 2 oder 4 gleichzeitig zeigen)
+                        for (const sym of symbols || []) {
+                            if (!isScanning) break;
+                            onScanSuccess(sym.decode("utf-8"));
                         }
                     } catch (error) {
                         console.error("ZBar Fehler: ", error);
@@ -259,24 +514,23 @@
         }
     }
 
-    function calculateLiveFPS() {
+    function calculateLiveRate() {
         const now = performance.now();
         scanTimestamps.push(now);
         scanTimestamps = scanTimestamps.filter(t => now - t <= 2000);
-
-        let currentFps = 0;
+        let rate = 0;
         if (scanTimestamps.length > 1) {
-            const timeDiffSeconds = (now - scanTimestamps[0]) / 1000;
-            currentFps = (scanTimestamps.length - 1) / timeDiffSeconds;
+            rate = (scanTimestamps.length - 1) / ((now - scanTimestamps[0]) / 1000);
         }
-        document.getElementById("fpsCounter").innerText = `Scan-Rate: ${currentFps.toFixed(1)} FPS`;
+        const kbps = decoder ? (rate * decoder.blockSize / 1024).toFixed(1) : "0.0";
+        document.getElementById("fpsCounter").innerText = `Pakete: ${rate.toFixed(1)}/s · ${kbps} KB/s`;
     }
 
-    function buildLiveMatrix(totalFrames) {
+    function buildLiveMatrix(totalBlocks) {
         const container = document.getElementById("matrixContainer");
         container.innerHTML = "";
         const fragment = document.createDocumentFragment();
-        for (let i = 1; i <= totalFrames; i++) {
+        for (let i = 1; i <= totalBlocks; i++) {
             const box = document.createElement("div");
             box.id = `matrix-box-${i}`;
             box.className = "matrix-box";
@@ -287,48 +541,37 @@
     }
 
     function onScanSuccess(decodedText) {
-        if (typeof decodedText !== "string") return;
-        const protocolMatch = decodedText.match(FRAME_REGEX);
-        if (!protocolMatch) return;
+        if (receptionDone || typeof decodedText !== "string") return;
 
-        const currentFrame = parseInt(protocolMatch[1], 10);
-        const totalFrames = parseInt(protocolMatch[2], 10);
-        const frameMode = protocolMatch[3];
-        const streamId = protocolMatch[4] || null;
-        const payload = protocolMatch[5];
-
-        // Eingaben streng prüfen (vorher konnten z.B. Frame 0 oder Frame 99 von 5 den Zähler verfälschen)
-        if (!ALLOWED_MODES.includes(frameMode)) return;
-        if (totalFrames < 1 || totalFrames > MAX_FRAMES) return;
-        if (currentFrame < 1 || currentFrame > totalFrames) return;
-
-        calculateLiveFPS();
-
-        // Ein neuer Stream wird an der Stream-ID erkannt (alt: nur an der Frame-Anzahl,
-        // wodurch zwei Streams mit gleicher Länge vermischt werden konnten)
-        const streamKey = (streamId || "legacy") + "|" + totalFrames + "|" + frameMode;
-        if (streamKey !== currentStreamKey) {
-            currentStreamKey = streamKey;
-            totalChunksCount = totalFrames;
-            receivedChunks = new Map();
-            streamMode = frameMode;
-            isLegacyStream = !streamId;
-            scanTimestamps = [];
-            buildLiveMatrix(totalFrames);
+        const packet = QRT.parsePacket(decodedText);
+        if (!packet) {
+            if (!legacyWarned && LEGACY_REGEX.test(decodedText)) {
+                legacyWarned = true;
+                setStatus("⚠️ Alter Sender erkannt – bitte QR-Streamer.html aktualisieren.");
+            }
+            return;
         }
 
-        if (!receivedChunks.has(currentFrame)) {
-            receivedChunks.set(currentFrame, payload);
+        // Neuer Stream = andere Stream-ID (oder andere Grunddaten)
+        if (!decoder || !decoder.matches(packet)) {
+            decoder = new QRT.FountainDecoder(packet);
+            packetCount = 0;
+            scanTimestamps = [];
+            buildLiveMatrix(decoder.K);
+        }
 
-            const box = document.getElementById(`matrix-box-${currentFrame}`);
+        packetCount++;
+        calculateLiveRate();
+        const newBlock = decoder.add(packet);
+        if (newBlock >= 0) {
+            // Zeigt den Fortschritt (Rang): jede Kachel = ein Block mehr, der rekonstruierbar ist
+            const box = document.getElementById(`matrix-box-${newBlock + 1}`);
             if (box) box.classList.add("loaded");
+        }
+        setStatus(`Empfange: ${decoder.rank} von ${decoder.K} Blöcken`);
 
-            const receivedCount = receivedChunks.size;
-            setStatus(`Empfange: ${receivedCount} von ${totalFrames} Teilen`);
-
-            if (receivedCount === totalFrames) {
-                assembleAndCheckEncryption();
-            }
+        if (decoder.isComplete()) {
+            finishReception();
         }
     }
 
@@ -347,15 +590,13 @@
         p.className = "error-text";
         p.innerText = message;
         content.appendChild(p);
-        document.getElementById("copyBtn").style.display = "none";
-        document.getElementById("shareBtn").style.display = "none";
-        document.getElementById("pdfBtn").style.display = "none";
+        ["copyBtn", "shareBtn", "pdfBtn"].forEach(id => document.getElementById(id).style.display = "none");
         document.getElementById("cardButtons").style.display = "flex";
         revealCard();
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
     }
 
-    function assembleAndCheckEncryption() {
+    function hideScannerUi() {
         isScanning = false;
         stopCamera();
         document.getElementById("scanLaser").style.display = "none";
@@ -363,24 +604,26 @@
         document.getElementById("status").style.display = "none";
         document.getElementById("fpsCounter").style.display = "none";
         document.getElementById("matrixContainer").style.display = "none";
+    }
 
-        let fullAssembledString = "";
-        for (let i = 1; i <= totalChunksCount; i++) {
-            fullAssembledString += receivedChunks.get(i);
+    async function finishReception() {
+        receptionDone = true;
+        hideScannerUi();
+        const dec = decoder;
+        decoder = null;
+
+        const data = dec.result();
+        // Prüfsumme über die Gesamtdaten (fängt jede Art von Beschädigung ab)
+        if (await QRT.checksum(data) !== dec.sum) {
+            showError("❌ FEHLER", "Prüfsumme stimmt nicht – die Daten sind beschädigt. Bitte neu scannen.");
+            return;
         }
-        receivedChunks = new Map();
+        isMarkdownStream = !!(dec.flags & QRT.FLAG_MARKDOWN);
 
-        if (streamMode === 'EX' || streamMode === 'EM') {
-            if (isLegacyStream) {
-                showError("⚠️ ALTES FORMAT",
-                    "Dieser Stream wurde mit einer alten Version des QR-Streamers (CryptoJS-Verschlüsselung) erzeugt. " +
-                    "Aus Sicherheitsgründen wird dieses Format nicht mehr unterstützt. Bitte aktualisiere QR-Streamer.html und sende erneut.");
-                return;
-            }
-            encryptedPayloadBase64 = fullAssembledString;
+        if (dec.flags & QRT.FLAG_ENCRYPTED) {
+            encryptedPayload = data;
             document.getElementById("cardTypeHeader").innerText = "🔒 VERSCHLÜSSELTER EMPFANG";
             document.getElementById("cardButtons").style.display = "none";
-
             document.getElementById("result-content").innerHTML = `
                 <div class="crypto-ui">
                     <h2>Geschützte Daten</h2>
@@ -394,37 +637,8 @@
             document.getElementById("receiverPin").addEventListener("keydown", (e) => { if (e.key === "Enter") attemptDecryption(); });
             revealCard();
         } else {
-            processDecryptedData(fullAssembledString);
+            await showDecompressed(data, true);
         }
-    }
-
-    function base64ToBytes(b64) {
-        const bin = atob(b64.replace(/\s+/g, ""));
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        return bytes;
-    }
-
-    // AES-256-GCM + PBKDF2-SHA256 über die Web Crypto API.
-    // GCM prüft die Integrität: ein falscher PIN oder manipulierte Daten führen garantiert zu einem Fehler
-    // (vorher konnte CryptoJS bei falschem PIN zufälligen "Datensalat" liefern).
-    async function decryptPayload(b64, passphrase) {
-        if (!window.crypto || !crypto.subtle) {
-            throw new Error("Web Crypto API nicht verfügbar (Seite muss über https:// oder lokal geöffnet werden).");
-        }
-        const data = base64ToBytes(b64);
-        if (data.length < 16 + 12 + 16) throw new Error("Daten zu kurz");
-        const salt = data.slice(0, 16);
-        const iv = data.slice(16, 28);
-        const cipher = data.slice(28);
-        const enc = new TextEncoder();
-        const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-        const key = await crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
-            baseKey, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
-        );
-        const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
-        return new TextDecoder("utf-8", { fatal: true }).decode(plain);
     }
 
     let decryptInProgress = false;
@@ -440,11 +654,9 @@
         btn.disabled = true;
         btn.innerText = "Entschlüssele…";
         errorEl.style.display = "none";
+        let plain = null;
         try {
-            const decryptedString = await decryptPayload(encryptedPayloadBase64, pin);
-            encryptedPayloadBase64 = "";
-            document.getElementById("cardButtons").style.display = "flex";
-            processDecryptedData(decryptedString);
+            plain = await QRT.decrypt(encryptedPayload, pin);
         } catch (e) {
             pinField.value = "";
             errorEl.style.display = "block";
@@ -454,12 +666,28 @@
         } finally {
             decryptInProgress = false;
         }
+        if (plain) {
+            encryptedPayload = null;
+            document.getElementById("cardButtons").style.display = "flex";
+            await showDecompressed(plain, false);
+        }
+    }
+
+    async function showDecompressed(bytes, reveal) {
+        let text;
+        try {
+            text = new TextDecoder("utf-8", { fatal: true }).decode(await QRT.inflate(bytes));
+        } catch (e) {
+            showError("❌ FEHLER", "Die Daten konnten nicht dekomprimiert werden. Bitte neu scannen.");
+            return;
+        }
+        displayText(text);
+        if (reveal) revealCard();
     }
 
     // Der intelligente und fehlertolerante CSV-Detektor
     function formatIfCsv(text) {
         const lines = text.trim().split('\n');
-
         if (lines.length < 3) return text;
 
         const separator = lines[0].includes(';') ? ';' : (lines[0].includes(',') ? ',' : null);
@@ -474,12 +702,10 @@
 
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i].trim();
-
             if (line === "") {
                 if (!isStillCsv) extraTextLines.push(line);
                 continue;
             }
-
             if (isStillCsv) {
                 if (line.split(separator).length === expectedColumns) {
                     validCsvLines.push(line);
@@ -496,10 +722,8 @@
 
         let markdownTable = "";
         validCsvLines.forEach((line, index) => {
-            // "|" in Zellen escapen, sonst zerfällt die Markdown-Tabelle
             const columns = line.split(separator).map(cell => cell.trim().replace(/\|/g, "\\|"));
             markdownTable += "| " + columns.join(" | ") + " |\n";
-
             if (index === 0) {
                 markdownTable += "|" + columns.map(() => "---").join("|") + "|\n";
             }
@@ -508,12 +732,10 @@
         if (extraTextLines.length > 0) {
             markdownTable += "\n\n" + extraTextLines.join("\n");
         }
-
         return markdownTable;
     }
 
-    // Markdown -> HTML -> DOMPurify. Ohne diesen Schritt konnte ein präparierter QR-Code
-    // beliebiges JavaScript im Reader ausführen (z.B. <img src=x onerror=...>).
+    // Markdown -> HTML -> DOMPurify (verhindert Script-Injection über präparierte QR-Codes)
     function renderSafeMarkdown(markdown) {
         const html = marked.parse(markdown, { breaks: true, mangle: false, headerIds: false });
         return DOMPurify.sanitize(html, {
@@ -523,47 +745,24 @@
         });
     }
 
-    function processDecryptedData(payloadString) {
-        let finalDecodedText = payloadString;
-
-        // Dekompression falls nötig
-        if (['CX', 'CM', 'EX', 'EM'].includes(streamMode)) {
-            let decompressed = null;
-            try {
-                decompressed = LZString.decompressFromEncodedURIComponent(payloadString);
-            } catch (e) {
-                decompressed = null;
-            }
-            // LZString wirft bei kaputten Daten meist KEINEN Fehler, sondern liefert null oder "" zurück
-            if (decompressed === null || (decompressed === "" && payloadString.length > 0)) {
-                showError("❌ FEHLER", "Die Daten konnten nicht dekomprimiert werden (beschädigt oder unvollständig). Bitte neu scannen.");
-                return;
-            }
-            finalDecodedText = decompressed;
-        }
-
+    function displayText(finalDecodedText) {
         rawAssembledText = finalDecodedText; // Unangetastet für den Kopieren-Button
 
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
         const pdfBtn = document.getElementById("pdfBtn");
 
-        // Nur formatieren, wenn der SENDER auch Markdown (MD, CM, EM) gewählt hat
-        const isMarkdownMode = ['MD', 'CM', 'EM'].includes(streamMode);
-
-        if (isMarkdownMode) {
-            let textForDisplay = formatIfCsv(finalDecodedText);
-            let isCsv = (textForDisplay !== finalDecodedText);
+        if (isMarkdownStream) {
+            const textForDisplay = formatIfCsv(finalDecodedText);
+            const isCsv = (textForDisplay !== finalDecodedText);
 
             contentArea.innerHTML = renderSafeMarkdown(textForDisplay);
-            // Links sicher in neuem Tab öffnen
             contentArea.querySelectorAll("a[href]").forEach(a => {
                 a.setAttribute("target", "_blank");
                 a.setAttribute("rel", "noopener noreferrer");
             });
 
             headerArea.innerText = isCsv ? "📊 Empfang: CSV Tabelle" : "📝 Empfang: Markdown Dokument";
-
             pdfBtn.style.display = "flex";
             contentArea.style.whiteSpace = "normal";
 
@@ -577,23 +776,15 @@
                     trust: false
                 });
             }
-
         } else {
-            // Text-Modus (TX, CX, EX): Strikt roher Text, keine Formatierung, kein PDF
             contentArea.textContent = finalDecodedText;
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-
             pdfBtn.style.display = "none";
             contentArea.style.whiteSpace = "pre-wrap";
         }
 
         document.getElementById("copyBtn").style.display = "flex";
         if (navigator.share) document.getElementById("shareBtn").style.display = "flex";
-
-        // Bei verschlüsselten Streams ist die Karte schon sichtbar
-        if (!['EX', 'EM'].includes(streamMode)) {
-            revealCard();
-        }
     }
 
     function exportToPDF() {
@@ -611,21 +802,21 @@
             document.getElementById("matrixContainer").style.display = "grid";
             document.getElementById("matrixContainer").innerHTML = "";
             document.getElementById("fpsCounter").style.display = "block";
-            document.getElementById("fpsCounter").innerText = "Scan-Rate: 0.0 FPS";
+            document.getElementById("fpsCounter").innerText = "Pakete: 0.0/s · 0.0 KB/s";
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             document.getElementById("cardButtons").style.display = "flex";
             document.getElementById("pdfBtn").style.display = "none";
 
-            receivedChunks = new Map();
-            totalChunksCount = 0;
-            currentStreamKey = null;
+            decoder = null;
             rawAssembledText = "";
-            encryptedPayloadBase64 = "";
+            encryptedPayload = null;
             scanTimestamps = [];
+            packetCount = 0;
+            legacyWarned = false;
+            receptionDone = false;
 
             setStatus("Starte Kamera...");
-
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
@@ -655,7 +846,6 @@
         navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch(() => {});
     }
 
-    // Kamera freigeben, wenn die Seite verlassen wird
     window.addEventListener('pagehide', stopCamera);
     window.addEventListener('DOMContentLoaded', initScanner);
 </script>

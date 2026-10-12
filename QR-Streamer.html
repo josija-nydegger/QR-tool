@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Sicherheit: Diese Seite darf keinerlei Netzwerkverbindungen aufbauen (echter Offline-/Air-Gap-Betrieb). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
     <meta name="referrer" content="no-referrer">
-    <title>QR-Code Datenüberträger (Sender - Precision Edition)</title>
-    <!-- Bibliotheken sind direkt eingebettet (siehe Ende der Datei): kein CDN, kein Internet nötig. -->
+    <title>QR-Code Datenüberträger (Sender - Fountain Edition)</title>
+    <!-- Bibliothek eingebettet (siehe Ende der Datei): kein CDN, kein Internet nötig. -->
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; display: flex; flex-direction: column; align-items: center; padding: 30px; margin: 0; transition: background-color 0.3s; }
         .container { max-width: 600px; width: 100%; background: white; padding: 24px; border-radius: 12px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: opacity 0.3s; }
@@ -25,7 +25,7 @@
         .textarea-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
         .btn-clear { background: none; border: none; color: #ff3b30; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; transition: opacity 0.2s; }
         .btn-clear:hover { opacity: 0.7; }
-        #textStats { font-size: 13px; color: #86868b; font-weight: 500; }
+        #textStats { font-size: 13px; color: #86868b; font-weight: 500; text-align: right; }
 
         .vcard-form { display: none; background: #f2f2f7; padding: 15px; border-radius: 8px; border: 1px solid #e5e5ea; margin-bottom: 15px; }
         .vcard-row { display: flex; gap: 10px; margin-bottom: 10px; }
@@ -48,12 +48,10 @@
         .remember-pin-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #86868b; cursor: pointer; margin: 0; }
         .remember-pin-label input { width: 16px; height: 16px; cursor: pointer; }
 
-        .controls-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .controls-wrapper { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 15px; }
         select, input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 14px; }
-
-        .precision-wrapper { margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e5ea; }
-        .precision-wrapper input { font-family: monospace; }
-        .precision-hint { font-size: 12px; color: #86868b; margin-top: 4px; display: block; }
+        .controls-hint { font-size: 12px; color: #86868b; margin-top: 10px; display: block; line-height: 1.4; }
+        #rateInfo { font-weight: 600; color: #1d1d1f; }
 
         .action-buttons { display: flex; gap: 10px; margin-top: 20px; }
         button.action-btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
@@ -65,20 +63,20 @@
         .btn-stop { background-color: #ff3b30; color: white; display: none; width: 100%; margin-top: 20px; }
 
         #visualizer { display: flex; flex-direction: column; align-items: center; margin-top: 30px; width: 100%; max-width: 600px; cursor: default; }
-        #qr-image { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 20px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: all 0.3s; image-rendering: pixelated; }
+        #qr-canvas { width: 100%; height: auto; padding: 10px; box-sizing: border-box; background: white; border: 1px solid #d2d2d7; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); image-rendering: pixelated; display: block; }
         #status { margin-top: 15px; font-weight: 600; font-size: 16px; color: #86868b; transition: opacity 0.3s; text-align: center; }
 
         body.kino-mode { background-color: #000; justify-content: center; height: 100vh; overflow: hidden; padding: 0; }
         body.kino-mode .container { display: none; }
-        body.kino-mode #visualizer { margin-top: 0; max-width: 100vw; height: 100vh; justify-content: center; cursor: pointer; }
-        body.kino-mode #qr-image { max-height: 85vh; max-width: 85vw; padding: 35px; border-radius: 20px; border: none; box-shadow: 0 0 50px rgba(255,255,255,0.1); }
-        body.kino-mode #status { color: #333; position: absolute; bottom: 15px; font-size: 14px; }
+        body.kino-mode #visualizer { margin-top: 0; max-width: 100vw; width: 100vw; height: 100vh; justify-content: center; cursor: pointer; }
+        body.kino-mode #qr-canvas { width: auto; height: auto; max-height: 90vh; max-width: 95vw; padding: 0; border-radius: 12px; border: none; box-shadow: 0 0 50px rgba(255,255,255,0.1); }
+        body.kino-mode #status { color: #333; position: absolute; bottom: 10px; font-size: 14px; margin: 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>QR-Streamer (Precision)</h1>
+    <h1>QR-Streamer (Fountain)</h1>
 
     <label>Sende-Modus:</label>
     <div class="mode-selector">
@@ -142,23 +140,27 @@
         <div class="controls-wrapper">
             <div>
                 <label for="chunkSize">Paketgrösse:</label>
-                <select id="chunkSize">
-                    <option value="60">Sehr sicher (60 Zeichen)</option>
-                    <option value="150">Normal (150 Zeichen)</option>
-                    <option value="300" selected>Gross (300 Zeichen - Sweet Spot)</option>
+                <select id="chunkSize" onchange="updateRateInfo()">
+                    <option value="200">Sehr sicher (200 B)</option>
+                    <option value="400" selected>Normal (400 B)</option>
+                    <option value="700">Gross (700 B)</option>
+                    <option value="1000">Riesig (1000 B)</option>
                 </select>
             </div>
             <div>
-                <label for="fps">Geschwindigkeit (FPS):</label>
-                <input type="number" id="fps" value="15" min="1" max="30">
+                <label for="codesPerFrame">Codes pro Bild:</label>
+                <select id="codesPerFrame" onchange="updateRateInfo()">
+                    <option value="1" selected>1</option>
+                    <option value="2">2 nebeneinander</option>
+                    <option value="4">4 (2×2)</option>
+                </select>
+            </div>
+            <div>
+                <label for="fps">Bilder/Sek.:</label>
+                <input type="number" id="fps" value="15" min="1" max="30" oninput="updateRateInfo()">
             </div>
         </div>
-
-        <div class="precision-wrapper">
-            <label for="targetFrames" style="margin-top:0;">🎯 Gezielte Frames senden (Optional):</label>
-            <input type="text" id="targetFrames" placeholder="z.B. 2, 15, 36 oder 10-14">
-            <span class="precision-hint">Lass das Feld leer, um das gesamte Dokument normal zu senden. Solange Text und PIN gleich bleiben, bleiben auch die Frames identisch.</span>
-        </div>
+        <span class="controls-hint">Rohdurchsatz: <span id="rateInfo">6.0 KB/s</span>. Fountain-Modus: einfach laufen lassen, bis der Empfänger fertig ist – welche Pakete verpasst werden, spielt keine Rolle. Grosse Pakete und mehrere Codes am besten im Kino-Modus testen.</span>
     </div>
 
     <div class="action-buttons" id="actionBtns">
@@ -169,49 +171,286 @@
 </div>
 
 <div id="visualizer" onclick="exitKinoModeOnClick()">
-    <img id="qr-image" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Warte auf Start..." />
+    <canvas id="qr-canvas" width="1" height="1"></canvas>
     <div id="status">Bereit zum Senden</div>
 </div>
 
-<!-- Eingebettete Bibliotheken (unverändert aus npm): QRious 4.0.2 (GPL-3.0, github.com/neocotic/qrious) und lz-string 1.5.0 (MIT, github.com/pieroxy/lz-string) -->
-<script>/* QRious 4.0.2 */
-/*! QRious v4.0.2 | (C) 2017 Alasdair Mercer | GPL v3 License
-Based on jsqrencode | (C) 2010 tz@execpc.com | GPL v3 License
-*/
-!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):t.QRious=e()}(this,function(){"use strict";function t(t,e){var n;return"function"==typeof Object.create?n=Object.create(t):(s.prototype=t,n=new s,s.prototype=null),e&&i(!0,n,e),n}function e(e,n,s,r){var o=this;return"string"!=typeof e&&(r=s,s=n,n=e,e=null),"function"!=typeof n&&(r=s,s=n,n=function(){return o.apply(this,arguments)}),i(!1,n,o,r),n.prototype=t(o.prototype,s),n.prototype.constructor=n,n.class_=e||o.class_,n.super_=o,n}function i(t,e,i){for(var n,s,a=0,h=(i=o.call(arguments,2)).length;a<h;a++){s=i[a];for(n in s)t&&!r.call(s,n)||(e[n]=s[n])}}function n(){}var s=function(){},r=Object.prototype.hasOwnProperty,o=Array.prototype.slice,a=e;n.class_="Nevis",n.super_=Object,n.extend=a;var h=n,f=h.extend(function(t,e,i){this.qrious=t,this.element=e,this.element.qrious=t,this.enabled=Boolean(i)},{draw:function(t){},getElement:function(){return this.enabled||(this.enabled=!0,this.render()),this.element},getModuleSize:function(t){var e=this.qrious,i=e.padding||0,n=Math.floor((e.size-2*i)/t.width);return Math.max(1,n)},getOffset:function(t){var e=this.qrious,i=e.padding;if(null!=i)return i;var n=this.getModuleSize(t),s=Math.floor((e.size-n*t.width)/2);return Math.max(0,s)},render:function(t){this.enabled&&(this.resize(),this.reset(),this.draw(t))},reset:function(){},resize:function(){}}),c=f.extend({draw:function(t){var e,i,n=this.qrious,s=this.getModuleSize(t),r=this.getOffset(t),o=this.element.getContext("2d");for(o.fillStyle=n.foreground,o.globalAlpha=n.foregroundAlpha,e=0;e<t.width;e++)for(i=0;i<t.width;i++)t.buffer[i*t.width+e]&&o.fillRect(s*e+r,s*i+r,s,s)},reset:function(){var t=this.qrious,e=this.element.getContext("2d"),i=t.size;e.lineWidth=1,e.clearRect(0,0,i,i),e.fillStyle=t.background,e.globalAlpha=t.backgroundAlpha,e.fillRect(0,0,i,i)},resize:function(){var t=this.element;t.width=t.height=this.qrious.size}}),u=h.extend(null,{BLOCK:[0,11,15,19,23,27,31,16,18,20,22,24,26,28,20,22,24,24,26,28,28,22,24,24,26,26,28,28,24,24,26,26,26,28,28,24,26,26,26,28,28]}),l=h.extend(null,{BLOCKS:[1,0,19,7,1,0,16,10,1,0,13,13,1,0,9,17,1,0,34,10,1,0,28,16,1,0,22,22,1,0,16,28,1,0,55,15,1,0,44,26,2,0,17,18,2,0,13,22,1,0,80,20,2,0,32,18,2,0,24,26,4,0,9,16,1,0,108,26,2,0,43,24,2,2,15,18,2,2,11,22,2,0,68,18,4,0,27,16,4,0,19,24,4,0,15,28,2,0,78,20,4,0,31,18,2,4,14,18,4,1,13,26,2,0,97,24,2,2,38,22,4,2,18,22,4,2,14,26,2,0,116,30,3,2,36,22,4,4,16,20,4,4,12,24,2,2,68,18,4,1,43,26,6,2,19,24,6,2,15,28,4,0,81,20,1,4,50,30,4,4,22,28,3,8,12,24,2,2,92,24,6,2,36,22,4,6,20,26,7,4,14,28,4,0,107,26,8,1,37,22,8,4,20,24,12,4,11,22,3,1,115,30,4,5,40,24,11,5,16,20,11,5,12,24,5,1,87,22,5,5,41,24,5,7,24,30,11,7,12,24,5,1,98,24,7,3,45,28,15,2,19,24,3,13,15,30,1,5,107,28,10,1,46,28,1,15,22,28,2,17,14,28,5,1,120,30,9,4,43,26,17,1,22,28,2,19,14,28,3,4,113,28,3,11,44,26,17,4,21,26,9,16,13,26,3,5,107,28,3,13,41,26,15,5,24,30,15,10,15,28,4,4,116,28,17,0,42,26,17,6,22,28,19,6,16,30,2,7,111,28,17,0,46,28,7,16,24,30,34,0,13,24,4,5,121,30,4,14,47,28,11,14,24,30,16,14,15,30,6,4,117,30,6,14,45,28,11,16,24,30,30,2,16,30,8,4,106,26,8,13,47,28,7,22,24,30,22,13,15,30,10,2,114,28,19,4,46,28,28,6,22,28,33,4,16,30,8,4,122,30,22,3,45,28,8,26,23,30,12,28,15,30,3,10,117,30,3,23,45,28,4,31,24,30,11,31,15,30,7,7,116,30,21,7,45,28,1,37,23,30,19,26,15,30,5,10,115,30,19,10,47,28,15,25,24,30,23,25,15,30,13,3,115,30,2,29,46,28,42,1,24,30,23,28,15,30,17,0,115,30,10,23,46,28,10,35,24,30,19,35,15,30,17,1,115,30,14,21,46,28,29,19,24,30,11,46,15,30,13,6,115,30,14,23,46,28,44,7,24,30,59,1,16,30,12,7,121,30,12,26,47,28,39,14,24,30,22,41,15,30,6,14,121,30,6,34,47,28,46,10,24,30,2,64,15,30,17,4,122,30,29,14,46,28,49,10,24,30,24,46,15,30,4,18,122,30,13,32,46,28,48,14,24,30,42,32,15,30,20,4,117,30,40,7,47,28,43,22,24,30,10,67,15,30,19,6,118,30,18,31,47,28,34,34,24,30,20,61,15,30],FINAL_FORMAT:[30660,29427,32170,30877,26159,25368,27713,26998,21522,20773,24188,23371,17913,16590,20375,19104,13663,12392,16177,14854,9396,8579,11994,11245,5769,5054,7399,6608,1890,597,3340,2107],LEVELS:{L:1,M:2,Q:3,H:4}}),_=h.extend(null,{EXPONENT:[1,2,4,8,16,32,64,128,29,58,116,232,205,135,19,38,76,152,45,90,180,117,234,201,143,3,6,12,24,48,96,192,157,39,78,156,37,74,148,53,106,212,181,119,238,193,159,35,70,140,5,10,20,40,80,160,93,186,105,210,185,111,222,161,95,190,97,194,153,47,94,188,101,202,137,15,30,60,120,240,253,231,211,187,107,214,177,127,254,225,223,163,91,182,113,226,217,175,67,134,17,34,68,136,13,26,52,104,208,189,103,206,129,31,62,124,248,237,199,147,59,118,236,197,151,51,102,204,133,23,46,92,184,109,218,169,79,158,33,66,132,21,42,84,168,77,154,41,82,164,85,170,73,146,57,114,228,213,183,115,230,209,191,99,198,145,63,126,252,229,215,179,123,246,241,255,227,219,171,75,150,49,98,196,149,55,110,220,165,87,174,65,130,25,50,100,200,141,7,14,28,56,112,224,221,167,83,166,81,162,89,178,121,242,249,239,195,155,43,86,172,69,138,9,18,36,72,144,61,122,244,245,247,243,251,235,203,139,11,22,44,88,176,125,250,233,207,131,27,54,108,216,173,71,142,0],LOG:[255,0,1,25,2,50,26,198,3,223,51,238,27,104,199,75,4,100,224,14,52,141,239,129,28,193,105,248,200,8,76,113,5,138,101,47,225,36,15,33,53,147,142,218,240,18,130,69,29,181,194,125,106,39,249,185,201,154,9,120,77,228,114,166,6,191,139,98,102,221,48,253,226,152,37,179,16,145,34,136,54,208,148,206,143,150,219,189,241,210,19,92,131,56,70,64,30,66,182,163,195,72,126,110,107,58,40,84,250,133,186,61,202,94,155,159,10,21,121,43,78,212,229,172,115,243,167,87,7,112,192,247,140,128,99,13,103,74,222,237,49,197,254,24,227,165,153,119,38,184,180,124,17,68,146,217,35,32,137,46,55,63,209,91,149,188,207,205,144,135,151,178,220,252,190,97,242,86,211,171,20,42,93,158,132,60,57,83,71,109,65,162,31,45,67,216,183,123,164,118,196,23,73,236,127,12,111,246,108,161,59,82,41,157,85,170,251,96,134,177,187,204,62,90,203,89,95,176,156,169,160,81,11,245,22,235,122,117,44,215,79,174,213,233,230,231,173,232,116,214,244,234,168,80,88,175]}),d=h.extend(null,{BLOCK:[3220,1468,2713,1235,3062,1890,2119,1549,2344,2936,1117,2583,1330,2470,1667,2249,2028,3780,481,4011,142,3098,831,3445,592,2517,1776,2234,1951,2827,1070,2660,1345,3177]}),v=h.extend(function(t){var e,i,n,s,r,o=t.value.length;for(this._badness=[],this._level=l.LEVELS[t.level],this._polynomial=[],this._value=t.value,this._version=0,this._stringBuffer=[];this._version<40&&(this._version++,n=4*(this._level-1)+16*(this._version-1),s=l.BLOCKS[n++],r=l.BLOCKS[n++],e=l.BLOCKS[n++],i=l.BLOCKS[n],n=e*(s+r)+r-3+(this._version<=9),!(o<=n)););this._dataBlock=e,this._eccBlock=i,this._neccBlock1=s,this._neccBlock2=r;var a=this.width=17+4*this._version;this.buffer=v._createArray(a*a),this._ecc=v._createArray(e+(e+i)*(s+r)+r),this._mask=v._createArray((a*(a+1)+1)/2),this._insertFinders(),this._insertAlignments(),this.buffer[8+a*(a-8)]=1,this._insertTimingGap(),this._reverseMask(),this._insertTimingRowAndColumn(),this._insertVersion(),this._syncMask(),this._convertBitStream(o),this._calculatePolynomial(),this._appendEccToData(),this._interleaveBlocks(),this._pack(),this._finish()},{_addAlignment:function(t,e){var i,n=this.buffer,s=this.width;for(n[t+s*e]=1,i=-2;i<2;i++)n[t+i+s*(e-2)]=1,n[t-2+s*(e+i+1)]=1,n[t+2+s*(e+i)]=1,n[t+i+1+s*(e+2)]=1;for(i=0;i<2;i++)this._setMask(t-1,e+i),this._setMask(t+1,e-i),this._setMask(t-i,e-1),this._setMask(t+i,e+1)},_appendData:function(t,e,i,n){var s,r,o,a=this._polynomial,h=this._stringBuffer;for(r=0;r<n;r++)h[i+r]=0;for(r=0;r<e;r++){if(255!==(s=_.LOG[h[t+r]^h[i]]))for(o=1;o<n;o++)h[i+o-1]=h[i+o]^_.EXPONENT[v._modN(s+a[n-o])];else for(o=i;o<i+n;o++)h[o]=h[o+1];h[i+n-1]=255===s?0:_.EXPONENT[v._modN(s+a[0])]}},_appendEccToData:function(){var t,e=0,i=this._dataBlock,n=this._calculateMaxLength(),s=this._eccBlock;for(t=0;t<this._neccBlock1;t++)this._appendData(e,i,n,s),e+=i,n+=s;for(t=0;t<this._neccBlock2;t++)this._appendData(e,i+1,n,s),e+=i+1,n+=s},_applyMask:function(t){var e,i,n,s,r=this.buffer,o=this.width;switch(t){case 0:for(s=0;s<o;s++)for(n=0;n<o;n++)n+s&1||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 1:for(s=0;s<o;s++)for(n=0;n<o;n++)1&s||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 2:for(s=0;s<o;s++)for(e=0,n=0;n<o;n++,e++)3===e&&(e=0),e||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 3:for(i=0,s=0;s<o;s++,i++)for(3===i&&(i=0),e=i,n=0;n<o;n++,e++)3===e&&(e=0),e||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 4:for(s=0;s<o;s++)for(e=0,i=s>>1&1,n=0;n<o;n++,e++)3===e&&(e=0,i=!i),i||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 5:for(i=0,s=0;s<o;s++,i++)for(3===i&&(i=0),e=0,n=0;n<o;n++,e++)3===e&&(e=0),(n&s&1)+!(!e|!i)||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 6:for(i=0,s=0;s<o;s++,i++)for(3===i&&(i=0),e=0,n=0;n<o;n++,e++)3===e&&(e=0),(n&s&1)+(e&&e===i)&1||this._isMasked(n,s)||(r[n+s*o]^=1);break;case 7:for(i=0,s=0;s<o;s++,i++)for(3===i&&(i=0),e=0,n=0;n<o;n++,e++)3===e&&(e=0),(e&&e===i)+(n+s&1)&1||this._isMasked(n,s)||(r[n+s*o]^=1)}},_calculateMaxLength:function(){return this._dataBlock*(this._neccBlock1+this._neccBlock2)+this._neccBlock2},_calculatePolynomial:function(){var t,e,i=this._eccBlock,n=this._polynomial;for(n[0]=1,t=0;t<i;t++){for(n[t+1]=1,e=t;e>0;e--)n[e]=n[e]?n[e-1]^_.EXPONENT[v._modN(_.LOG[n[e]]+t)]:n[e-1];n[0]=_.EXPONENT[v._modN(_.LOG[n[0]]+t)]}for(t=0;t<=i;t++)n[t]=_.LOG[n[t]]},_checkBadness:function(){var t,e,i,n,s,r=0,o=this._badness,a=this.buffer,h=this.width;for(s=0;s<h-1;s++)for(n=0;n<h-1;n++)(a[n+h*s]&&a[n+1+h*s]&&a[n+h*(s+1)]&&a[n+1+h*(s+1)]||!(a[n+h*s]||a[n+1+h*s]||a[n+h*(s+1)]||a[n+1+h*(s+1)]))&&(r+=v.N2);var f=0;for(s=0;s<h;s++){for(i=0,o[0]=0,t=0,n=0;n<h;n++)t===(e=a[n+h*s])?o[i]++:o[++i]=1,f+=(t=e)?1:-1;r+=this._getBadness(i)}f<0&&(f=-f);var c=0,u=f;for(u+=u<<2,u<<=1;u>h*h;)u-=h*h,c++;for(r+=c*v.N4,n=0;n<h;n++){for(i=0,o[0]=0,t=0,s=0;s<h;s++)t===(e=a[n+h*s])?o[i]++:o[++i]=1,t=e;r+=this._getBadness(i)}return r},_convertBitStream:function(t){var e,i,n=this._ecc,s=this._version;for(i=0;i<t;i++)n[i]=this._value.charCodeAt(i);var r=this._stringBuffer=n.slice(),o=this._calculateMaxLength();t>=o-2&&(t=o-2,s>9&&t--);var a=t;if(s>9){for(r[a+2]=0,r[a+3]=0;a--;)e=r[a],r[a+3]|=255&e<<4,r[a+2]=e>>4;r[2]|=255&t<<4,r[1]=t>>4,r[0]=64|t>>12}else{for(r[a+1]=0,r[a+2]=0;a--;)e=r[a],r[a+2]|=255&e<<4,r[a+1]=e>>4;r[1]|=255&t<<4,r[0]=64|t>>4}for(a=t+3-(s<10);a<o;)r[a++]=236,r[a++]=17},_getBadness:function(t){var e,i=0,n=this._badness;for(e=0;e<=t;e++)n[e]>=5&&(i+=v.N1+n[e]-5);for(e=3;e<t-1;e+=2)n[e-2]===n[e+2]&&n[e+2]===n[e-1]&&n[e-1]===n[e+1]&&3*n[e-1]===n[e]&&(0===n[e-3]||e+3>t||3*n[e-3]>=4*n[e]||3*n[e+3]>=4*n[e])&&(i+=v.N3);return i},_finish:function(){this._stringBuffer=this.buffer.slice();var t,e,i=0,n=3e4;for(e=0;e<8&&(this._applyMask(e),(t=this._checkBadness())<n&&(n=t,i=e),7!==i);e++)this.buffer=this._stringBuffer.slice();i!==e&&this._applyMask(i),n=l.FINAL_FORMAT[i+(this._level-1<<3)];var s=this.buffer,r=this.width;for(e=0;e<8;e++,n>>=1)1&n&&(s[r-1-e+8*r]=1,e<6?s[8+r*e]=1:s[8+r*(e+1)]=1);for(e=0;e<7;e++,n>>=1)1&n&&(s[8+r*(r-7+e)]=1,e?s[6-e+8*r]=1:s[7+8*r]=1)},_interleaveBlocks:function(){var t,e,i=this._dataBlock,n=this._ecc,s=this._eccBlock,r=0,o=this._calculateMaxLength(),a=this._neccBlock1,h=this._neccBlock2,f=this._stringBuffer;for(t=0;t<i;t++){for(e=0;e<a;e++)n[r++]=f[t+e*i];for(e=0;e<h;e++)n[r++]=f[a*i+t+e*(i+1)]}for(e=0;e<h;e++)n[r++]=f[a*i+t+e*(i+1)];for(t=0;t<s;t++)for(e=0;e<a+h;e++)n[r++]=f[o+t+e*s];this._stringBuffer=n},_insertAlignments:function(){var t,e,i,n=this._version,s=this.width;if(n>1)for(t=u.BLOCK[n],i=s-7;;){for(e=s-7;e>t-3&&(this._addAlignment(e,i),!(e<t));)e-=t;if(i<=t+9)break;i-=t,this._addAlignment(6,i),this._addAlignment(i,6)}},_insertFinders:function(){var t,e,i,n,s=this.buffer,r=this.width;for(t=0;t<3;t++){for(e=0,n=0,1===t&&(e=r-7),2===t&&(n=r-7),s[n+3+r*(e+3)]=1,i=0;i<6;i++)s[n+i+r*e]=1,s[n+r*(e+i+1)]=1,s[n+6+r*(e+i)]=1,s[n+i+1+r*(e+6)]=1;for(i=1;i<5;i++)this._setMask(n+i,e+1),this._setMask(n+1,e+i+1),this._setMask(n+5,e+i),this._setMask(n+i+1,e+5);for(i=2;i<4;i++)s[n+i+r*(e+2)]=1,s[n+2+r*(e+i+1)]=1,s[n+4+r*(e+i)]=1,s[n+i+1+r*(e+4)]=1}},_insertTimingGap:function(){var t,e,i=this.width;for(e=0;e<7;e++)this._setMask(7,e),this._setMask(i-8,e),this._setMask(7,e+i-7);for(t=0;t<8;t++)this._setMask(t,7),this._setMask(t+i-8,7),this._setMask(t,i-8)},_insertTimingRowAndColumn:function(){var t,e=this.buffer,i=this.width;for(t=0;t<i-14;t++)1&t?(this._setMask(8+t,6),this._setMask(6,8+t)):(e[8+t+6*i]=1,e[6+i*(8+t)]=1)},_insertVersion:function(){var t,e,i,n,s=this.buffer,r=this._version,o=this.width;if(r>6)for(t=d.BLOCK[r-7],e=17,i=0;i<6;i++)for(n=0;n<3;n++,e--)1&(e>11?r>>e-12:t>>e)?(s[5-i+o*(2-n+o-11)]=1,s[2-n+o-11+o*(5-i)]=1):(this._setMask(5-i,2-n+o-11),this._setMask(2-n+o-11,5-i))},_isMasked:function(t,e){var i=v._getMaskBit(t,e);return 1===this._mask[i]},_pack:function(){var t,e,i,n=1,s=1,r=this.width,o=r-1,a=r-1,h=(this._dataBlock+this._eccBlock)*(this._neccBlock1+this._neccBlock2)+this._neccBlock2;for(e=0;e<h;e++)for(t=this._stringBuffer[e],i=0;i<8;i++,t<<=1){128&t&&(this.buffer[o+r*a]=1);do{s?o--:(o++,n?0!==a?a--:(n=!n,6===(o-=2)&&(o--,a=9)):a!==r-1?a++:(n=!n,6===(o-=2)&&(o--,a-=8))),s=!s}while(this._isMasked(o,a))}},_reverseMask:function(){var t,e,i=this.width;for(t=0;t<9;t++)this._setMask(t,8);for(t=0;t<8;t++)this._setMask(t+i-8,8),this._setMask(8,t);for(e=0;e<7;e++)this._setMask(8,e+i-7)},_setMask:function(t,e){var i=v._getMaskBit(t,e);this._mask[i]=1},_syncMask:function(){var t,e,i=this.width;for(e=0;e<i;e++)for(t=0;t<=e;t++)this.buffer[t+i*e]&&this._setMask(t,e)}},{_createArray:function(t){var e,i=[];for(e=0;e<t;e++)i[e]=0;return i},_getMaskBit:function(t,e){var i;return t>e&&(i=t,t=e,e=i),i=e,i+=e*e,i>>=1,i+=t},_modN:function(t){for(;t>=255;)t=((t-=255)>>8)+(255&t);return t},N1:3,N2:3,N3:40,N4:10}),p=v,m=f.extend({draw:function(){this.element.src=this.qrious.toDataURL()},reset:function(){this.element.src=""},resize:function(){var t=this.element;t.width=t.height=this.qrious.size}}),g=h.extend(function(t,e,i,n){this.name=t,this.modifiable=Boolean(e),this.defaultValue=i,this._valueTransformer=n},{transform:function(t){var e=this._valueTransformer;return"function"==typeof e?e(t,this):t}}),k=h.extend(null,{abs:function(t){return null!=t?Math.abs(t):null},hasOwn:function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},noop:function(){},toUpperCase:function(t){return null!=t?t.toUpperCase():null}}),w=h.extend(function(t){this.options={},t.forEach(function(t){this.options[t.name]=t},this)},{exists:function(t){return null!=this.options[t]},get:function(t,e){return w._get(this.options[t],e)},getAll:function(t){var e,i=this.options,n={};for(e in i)k.hasOwn(i,e)&&(n[e]=w._get(i[e],t));return n},init:function(t,e,i){"function"!=typeof i&&(i=k.noop);var n,s;for(n in this.options)k.hasOwn(this.options,n)&&(s=this.options[n],w._set(s,s.defaultValue,e),w._createAccessor(s,e,i));this._setAll(t,e,!0)},set:function(t,e,i){return this._set(t,e,i)},setAll:function(t,e){return this._setAll(t,e)},_set:function(t,e,i,n){var s=this.options[t];if(!s)throw new Error("Invalid option: "+t);if(!s.modifiable&&!n)throw new Error("Option cannot be modified: "+t);return w._set(s,e,i)},_setAll:function(t,e,i){if(!t)return!1;var n,s=!1;for(n in t)k.hasOwn(t,n)&&this._set(n,t[n],e,i)&&(s=!0);return s}},{_createAccessor:function(t,e,i){var n={get:function(){return w._get(t,e)}};t.modifiable&&(n.set=function(n){w._set(t,n,e)&&i(n,t)}),Object.defineProperty(e,t.name,n)},_get:function(t,e){return e["_"+t.name]},_set:function(t,e,i){var n="_"+t.name,s=i[n],r=t.transform(null!=e?e:t.defaultValue);return i[n]=r,r!==s}}),M=w,b=h.extend(function(){this._services={}},{getService:function(t){var e=this._services[t];if(!e)throw new Error("Service is not being managed with name: "+t);return e},setService:function(t,e){if(this._services[t])throw new Error("Service is already managed with name: "+t);e&&(this._services[t]=e)}}),B=new M([new g("background",!0,"white"),new g("backgroundAlpha",!0,1,k.abs),new g("element"),new g("foreground",!0,"black"),new g("foregroundAlpha",!0,1,k.abs),new g("level",!0,"L",k.toUpperCase),new g("mime",!0,"image/png"),new g("padding",!0,null,k.abs),new g("size",!0,100,k.abs),new g("value",!0,"")]),y=new b,O=h.extend(function(t){B.init(t,this,this.update.bind(this));var e=B.get("element",this),i=y.getService("element"),n=e&&i.isCanvas(e)?e:i.createCanvas(),s=e&&i.isImage(e)?e:i.createImage();this._canvasRenderer=new c(this,n,!0),this._imageRenderer=new m(this,s,s===e),this.update()},{get:function(){return B.getAll(this)},set:function(t){B.setAll(t,this)&&this.update()},toDataURL:function(t){return this.canvas.toDataURL(t||this.mime)},update:function(){var t=new p({level:this.level,value:this.value});this._canvasRenderer.render(t),this._imageRenderer.render(t)}},{use:function(t){y.setService(t.getName(),t)}});Object.defineProperties(O.prototype,{canvas:{get:function(){return this._canvasRenderer.getElement()}},image:{get:function(){return this._imageRenderer.getElement()}}});var A=O,L=h.extend({getName:function(){}}).extend({createCanvas:function(){},createImage:function(){},getName:function(){return"element"},isCanvas:function(t){},isImage:function(t){}}).extend({createCanvas:function(){return document.createElement("canvas")},createImage:function(){return document.createElement("img")},isCanvas:function(t){return t instanceof HTMLCanvasElement},isImage:function(t){return t instanceof HTMLImageElement}});return A.use(new L),A});
-
-//# sourceMappingURL=qrious.min.js.map
-</script>
-<script>/* lz-string 1.5.0 */
-var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});
+<!-- Eingebettete Bibliothek: qrcode-generator 2.0.4 von Kazuhiko Arase (MIT), minifiziert, mit kleinem Patch (feste Maske pro Stream, markiert mit PATCH) -->
+<script>
+// Copyright (c) 2009 Kazuhiko Arase
+// Licensed under the MIT license:
+var qrcode=function(){var t=function(r,e){var n=r,o=g[e],i=null,a=0,u=null,f=[],c={},l=function(t,r){i=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(a=4*n+17),h(0,0),h(a-7,0),h(0,a-7),v(),s(),w(t,r),n>=7&&d(t),null==u&&(u=y(n,o,f)),p(u,r)},h=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||a<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||a<=r+n||(i[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},s=function(){for(var t=8;t<a-8;t+=1)null==i[t][6]&&(i[t][6]=t%2==0);for(var r=8;r<a-8;r+=1)null==i[6][r]&&(i[6][r]=r%2==0)},v=function(){for(var t=B.getPatternPosition(n),r=0;r<t.length;r+=1)for(var e=0;e<t.length;e+=1){var o=t[r],a=t[e];if(null==i[o][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)i[o+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},d=function(t){for(var r=B.getBCHTypeNumber(n),e=0;e<18;e+=1){var o=!t&&1==(r>>e&1);i[Math.floor(e/3)][e%3+a-8-3]=o}for(e=0;e<18;e+=1){o=!t&&1==(r>>e&1);i[e%3+a-8-3][Math.floor(e/3)]=o}},w=function(t,r){for(var e=o<<3|r,n=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(n>>u&1);u<6?i[u][8]=f:u<8?i[u+1][8]=f:i[a-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(n>>u&1);u<8?i[8][a-u-1]=f:u<9?i[8][15-u-1+1]=f:i[8][15-u-1]=f}i[a-8][8]=!t},p=function(t,r){for(var e=-1,n=a-1,o=7,u=0,f=B.getMaskFunction(r),c=a-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==i[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>o&1)),f(n,c-g)&&(l=!l),i[n][c-g]=l,-1==(o-=1)&&(u+=1,o=7)}if((n+=e)<0||a<=n){n-=e,e=-e;break}}},y=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=C(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};c.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}f.push(e),u=null},c.isDark=function(t,r){if(t<0||a<=t||r<0||a<=r)throw t+","+r;return i[t][r]},c.getModuleCount=function(){return a},c.make=function(){if(n<1){for(var r=1;r<40;r++){for(var e=A.getRSBlocks(r,o),i=b(),a=0;a<f.length;a++){var u=f[a];i.put(u.getMode(),4),i.put(u.getLength(),B.getLengthInBits(u.getMode(),r)),u.write(i)}var g=0;for(a=0;a<e.length;a++)g+=e[a].dataCount;if(i.getLengthInBits()<=8*g)break}n=r}
+// PATCH (QR-Tool): Maske einmal pro Stream bestimmen und wiederverwenden (~8x schneller)
+var h="number"==typeof t.fixedMask?t.fixedMask:function(){for(var t=0,r=0,e=0;e<8;e+=1){l(!0,e);var n=B.getLostPoint(c);(0==e||t>n)&&(t=n,r=e)}return r}();c.maskPattern=h,l(!1,h)},c.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<c.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<c.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=c.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},c.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,f,g=c.getModuleCount()*t+2*r,l="";for(f="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+k([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+k(n.id)+'">'+k(n.text)+"</title>":"",l+=e.text?'<description id="'+k(e.id)+'">'+k(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<c.getModuleCount();a+=1)for(u=a*t+r,i=0;i<c.getModuleCount();i+=1)c.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+f);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},c.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=c.getModuleCount()*t+2*r,n=r,o=e-r;return I(e,e,function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return c.isDark(a,i)?0:1}return 1})},c.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=c.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=c.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=k(e),o+='"'),o+="/>"};var k=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return c.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*c.getModuleCount()+2*t,u=t,f=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<f&&u<=r&&r<f&&c.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<f&&u<=r+1&&r+1<f&&c.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=f?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=c.getModuleCount()*t+2*r,u=r,f=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<f&&u<=e&&e<f&&c.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},c.renderTo2dContext=function(t,r){r=r||2;for(var e=c.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=c.isDark(n,o)?"black":"white",t.fillRect(o*r,n*r,r,r)},c};t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}},t.stringToBytes=t.stringToBytesFuncs.default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return i}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,p=6,y=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case p:return function(t,r){return(t*r%2+t*r%3)%2==0};case y:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=C([1],0),e=0;e<t;e+=1)r=r.multiply(C([1,k.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),k=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function C(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=k.gexp(k.glog(n.getAt(e))+k.glog(t.getAt(o)));return C(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=k.glog(n.getAt(0))-k.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=k.gexp(k.glog(t.getAt(o))+r);return C(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},I=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}(function(){return qrcode});
+qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
 </script>
 
 <script>
-    // ===== Protokoll v2 =====
-    // Header: [Frame]/[Total]|[Modus]|[Stream-ID]|[Daten]
-    // Die Stream-ID (4 Zeichen) verhindert, dass Frames aus zwei verschiedenen Streams vermischt werden.
-    // Verschlüsselung (EX/EM): PBKDF2-SHA256 (600'000 Runden) + AES-256-GCM über die Web Crypto API.
-    //   Daten = Base64( Salt[16] | IV[12] | Chiffretext+Auth-Tag )
-    const PBKDF2_ITERATIONS = 600000;
-    const EMPTY_GIF = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+    // ======================================================================
+    // QR-Tool Kern (Protokoll v3) – identisch in Sender und Reader
+    // ----------------------------------------------------------------------
+    // QR-Inhalt:  "QR3:" + Base45( Header[20] | Block[S] )
+    // Header:     0     Version (3)
+    //             1     Flags (Bit0 = Markdown, Bit1 = verschlüsselt)
+    //             2-5   Stream-ID (zufällig)
+    //             6-9   Datenlänge L in Bytes
+    //             10-11 Blockgrösse S in Bytes
+    //             12-15 Paketnummer
+    //             16-19 Prüfsumme (erste 4 Bytes SHA-256 der Daten)
+    // Daten:      Deflate(UTF-8-Text), optional danach AES-256-GCM
+    // Fountain:   Paket 0..K-1 = Block 0..K-1 direkt (systematisch),
+    //             ab Paket K = zufällige XOR-Kombination aller Blöcke.
+    //             Der Empfänger löst per Gauss-Elimination (GF(2)) und
+    //             braucht dadurch nur ~K+2 beliebige Pakete.
+    // ======================================================================
+    const QRT = (() => {
+        const PREFIX = "QR3:";
+        const VERSION = 3;
+        const HEADER_LEN = 20;
+        const FLAG_MARKDOWN = 1, FLAG_ENCRYPTED = 2;
+        const PBKDF2_ITERATIONS = 600000;
+        const B45 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        const B45_LOOKUP = new Int16Array(128).fill(-1);
+        for (let i = 0; i < B45.length; i++) B45_LOOKUP[B45.charCodeAt(i)] = i;
+
+        // ---------- Base45 (RFC 9285): passt in den dichten QR-Alphanumerik-Modus ----------
+        function base45Encode(bytes) {
+            let out = "";
+            for (let i = 0; i + 1 < bytes.length; i += 2) {
+                const n = bytes[i] * 256 + bytes[i + 1];
+                out += B45[n % 45] + B45[Math.floor(n / 45) % 45] + B45[Math.floor(n / 2025)];
+            }
+            if (bytes.length % 2) {
+                const n = bytes[bytes.length - 1];
+                out += B45[n % 45] + B45[Math.floor(n / 45)];
+            }
+            return out;
+        }
+
+        function base45Decode(str) {
+            const len = str.length;
+            if (len % 3 === 1) throw new Error("Base45: ungültige Länge");
+            const out = new Uint8Array(Math.floor(len / 3) * 2 + (len % 3 === 2 ? 1 : 0));
+            let o = 0;
+            for (let i = 0; i < len; i += 3) {
+                const c = B45_LOOKUP[str.charCodeAt(i)], d = B45_LOOKUP[str.charCodeAt(i + 1)];
+                if (c < 0 || d < 0) throw new Error("Base45: ungültiges Zeichen");
+                if (i + 2 < len) {
+                    const e = B45_LOOKUP[str.charCodeAt(i + 2)];
+                    if (e < 0) throw new Error("Base45: ungültiges Zeichen");
+                    const n = c + d * 45 + e * 2025;
+                    if (n > 0xFFFF) throw new Error("Base45: Überlauf");
+                    out[o++] = n >> 8; out[o++] = n & 0xFF;
+                } else {
+                    const n = c + d * 45;
+                    if (n > 0xFF) throw new Error("Base45: Überlauf");
+                    out[o++] = n;
+                }
+            }
+            return out;
+        }
+
+        // ---------- Pseudozufall: deterministisch aus Stream-ID + Paketnummer ----------
+        function mulberry32(seed) {
+            return function () {
+                seed = (seed + 0x6D2B79F5) >>> 0;
+                let t = seed;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return (t ^ (t >>> 14)) >>> 0;
+            };
+        }
+
+        // Welche Blöcke stecken in Paket "index"? (Bitmaske über K Blöcke)
+        function coefficients(streamId, index, K) {
+            const words = new Uint32Array(Math.ceil(K / 32));
+            if (index < K) {
+                words[index >>> 5] = 1 << (index & 31);
+                return words;
+            }
+            const rnd = mulberry32((streamId ^ Math.imul(index, 0x9E3779B1)) >>> 0);
+            for (let w = 0; w < words.length; w++) words[w] = rnd();
+            const rest = K & 31;
+            if (rest) words[words.length - 1] &= (1 << rest) - 1 >>> 0;
+            if (words.every(v => v === 0)) { const b = index % K; words[b >>> 5] = 1 << (b & 31); }
+            return words;
+        }
+
+        function xorInto(target, source) {
+            for (let i = 0; i < target.length; i++) target[i] ^= source[i];
+        }
+
+        // ---------- Prüfsumme & Header ----------
+        async function checksum(bytes) {
+            const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+            return ((h[0] << 24) | (h[1] << 16) | (h[2] << 8) | h[3]) >>> 0;
+        }
+
+        function writeHeader(view, { flags, streamId, length, blockSize, index, sum }) {
+            view.setUint8(0, VERSION);
+            view.setUint8(1, flags);
+            view.setUint32(2, streamId);
+            view.setUint32(6, length);
+            view.setUint16(10, blockSize);
+            view.setUint32(12, index);
+            view.setUint32(16, sum);
+        }
+
+        function parsePacket(text) {
+            if (typeof text !== "string" || !text.startsWith(PREFIX)) return null;
+            let bytes;
+            try { bytes = base45Decode(text.slice(PREFIX.length)); } catch (e) { return null; }
+            if (bytes.length < HEADER_LEN + 1) return null;
+            const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            if (v.getUint8(0) !== VERSION) return null;
+            const p = {
+                flags: v.getUint8(1),
+                streamId: v.getUint32(2),
+                length: v.getUint32(6),
+                blockSize: v.getUint16(10),
+                index: v.getUint32(12),
+                sum: v.getUint32(16),
+                data: bytes.subarray(HEADER_LEN)
+            };
+            if (p.blockSize < 1 || p.data.length !== p.blockSize) return null;
+            if (p.length < 1 || p.length > 50 * 1024 * 1024) return null;
+            p.K = Math.ceil(p.length / p.blockSize);
+            return p;
+        }
+
+        // ---------- Encoder (Sender) ----------
+        class FountainEncoder {
+            constructor(data, { blockSize, flags, streamId, sum }) {
+                this.length = data.length;
+                this.blockSize = blockSize;
+                this.K = Math.ceil(data.length / blockSize);
+                this.flags = flags; this.streamId = streamId; this.sum = sum;
+                this.blocks = [];
+                for (let i = 0; i < this.K; i++) {
+                    const b = new Uint8Array(blockSize); // letzter Block mit Nullen aufgefüllt
+                    b.set(data.subarray(i * blockSize, Math.min(data.length, (i + 1) * blockSize)));
+                    this.blocks.push(b);
+                }
+            }
+            packet(index) {
+                const buf = new Uint8Array(HEADER_LEN + this.blockSize);
+                writeHeader(new DataView(buf.buffer), { flags: this.flags, streamId: this.streamId, length: this.length, blockSize: this.blockSize, index, sum: this.sum });
+                const body = buf.subarray(HEADER_LEN);
+                const coef = coefficients(this.streamId, index, this.K);
+                for (let w = 0; w < coef.length; w++) {
+                    let bits = coef[w];
+                    while (bits) {
+                        const low = bits & -bits;
+                        xorInto(body, this.blocks[w * 32 + (31 - Math.clz32(low))]);
+                        bits ^= low;
+                    }
+                }
+                return PREFIX + base45Encode(buf);
+            }
+        }
+
+        // ---------- Decoder (Empfänger): inkrementelle Gauss-Elimination über GF(2) ----------
+        class FountainDecoder {
+            constructor(p) {
+                this.streamId = p.streamId; this.flags = p.flags; this.length = p.length;
+                this.blockSize = p.blockSize; this.sum = p.sum; this.K = p.K;
+                this.rows = new Array(this.K).fill(null); // rows[pivot] = { coef, data }
+                this.rank = 0;
+                this.seen = new Set();
+                this.packetsUsed = 0;
+            }
+            matches(p) {
+                return p.streamId === this.streamId && p.length === this.length && p.blockSize === this.blockSize && p.flags === this.flags && p.sum === this.sum;
+            }
+            // Gibt die neu "belegte" Blocknummer zurück, oder -1 wenn das Paket nichts Neues brachte
+            add(p) {
+                if (this.seen.has(p.index)) return -1;
+                this.seen.add(p.index);
+                if (this.rank === this.K) return -1;
+                const coef = coefficients(this.streamId, p.index, this.K);
+                const data = new Uint8Array(p.data);
+                for (let w = 0; w < coef.length; w++) {
+                    while (coef[w]) {
+                        const pivot = w * 32 + (31 - Math.clz32(coef[w] & -coef[w]));
+                        const row = this.rows[pivot];
+                        if (!row) {
+                            this.rows[pivot] = { coef, data };
+                            this.rank++;
+                            this.packetsUsed++;
+                            return pivot;
+                        }
+                        xorInto(coef, row.coef); // Zeile hat nur Bits >= pivot
+                        xorInto(data, row.data);
+                    }
+                }
+                return -1; // linear abhängig
+            }
+            isComplete() { return this.rank === this.K; }
+            // Rückwärts-Einsetzen: höchster Pivot zuerst
+            result() {
+                const K = this.K, S = this.blockSize;
+                const blocks = new Array(K);
+                for (let p = K - 1; p >= 0; p--) {
+                    const { coef, data } = this.rows[p];
+                    const out = new Uint8Array(data);
+                    for (let w = p >>> 5; w < coef.length; w++) {
+                        let bits = coef[w];
+                        while (bits) {
+                            const low = bits & -bits;
+                            const q = w * 32 + (31 - Math.clz32(low));
+                            if (q > p) xorInto(out, blocks[q]);
+                            bits ^= low;
+                        }
+                    }
+                    blocks[p] = out;
+                }
+                const all = new Uint8Array(K * S);
+                blocks.forEach((b, i) => all.set(b, i * S));
+                return all.subarray(0, this.length);
+            }
+        }
+
+        // ---------- Kompression (eingebaut im Browser) ----------
+        async function pipe(bytes, stream) {
+            const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+            return new Uint8Array(await out.arrayBuffer());
+        }
+        function hasCompression() { return typeof CompressionStream === "function" && typeof DecompressionStream === "function"; }
+        const deflate = bytes => pipe(bytes, new CompressionStream("deflate-raw"));
+        const inflate = bytes => pipe(bytes, new DecompressionStream("deflate-raw"));
+
+        // ---------- Verschlüsselung: PBKDF2-SHA256 + AES-256-GCM ----------
+        async function deriveKey(passphrase, salt, usage) {
+            const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+                base, { name: "AES-GCM", length: 256 }, false, [usage]);
+        }
+        async function encrypt(bytes, passphrase) {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(passphrase, salt, "encrypt");
+            const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes));
+            const out = new Uint8Array(28 + cipher.length);
+            out.set(salt, 0); out.set(iv, 16); out.set(cipher, 28);
+            return out;
+        }
+        async function decrypt(bytes, passphrase) {
+            if (bytes.length < 28 + 16) throw new Error("Daten zu kurz");
+            const key = await deriveKey(passphrase, bytes.slice(0, 16), "decrypt");
+            return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(16, 28) }, key, bytes.slice(28)));
+        }
+
+        return { PREFIX, FLAG_MARKDOWN, FLAG_ENCRYPTED, HEADER_LEN, base45Encode, base45Decode, checksum, parsePacket,
+                 FountainEncoder, FountainDecoder, hasCompression, deflate, inflate, encrypt, decrypt };
+    })();
+
 
     let animationInterval = null;
-    let frames = [];
-    let playbackSequence = [];
-    let sequenceIndex = 0;
-    let isShuffling = false;
     let currentMode = 'TX';
-
-    // Cache: Gleicher Text + gleicher PIN => identische Frames (wichtig für "Gezielte Frames",
-    // sonst würde eine neue Verschlüsselung mit neuem Salt/IV ganz andere Frames erzeugen).
+    let streamActive = false;
+    // Cache: gleicher Text + PIN + Paketgrösse => gleicher Stream (gleiche Stream-ID).
+    // So kann man stoppen und weitersenden, ohne dass der Empfänger von vorne beginnt.
     let lastBuild = null;
-
-    function shuffleArray(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-    }
 
     function clearText() {
         document.getElementById('textInput').value = "";
@@ -221,21 +460,15 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
     function clearVCard() {
         ["vcVorname", "vcNachname", "vcTelefon", "vcEmail", "vcFirma"].forEach(id => document.getElementById(id).value = "");
-        if (currentMode === 'VC' && document.getElementById("stopBtn").style.display === "block") {
-            stopStreaming();
-        }
+        if (currentMode === 'VC' && streamActive) stopStreaming();
     }
 
     function togglePinVisibility() {
         const pinInput = document.getElementById("pinInput");
         const eyeBtn = document.getElementById("eyeToggle");
-        if (pinInput.type === "password") {
-            pinInput.type = "text";
-            eyeBtn.innerText = "🙈";
-        } else {
-            pinInput.type = "password";
-            eyeBtn.innerText = "👁️";
-        }
+        const show = pinInput.type === "password";
+        pinInput.type = show ? "text" : "password";
+        eyeBtn.innerText = show ? "🙈" : "👁️";
     }
 
     // Ehrliche Stärke-Anzeige: Wer den Bildschirm filmt, kann kurze PINs offline durchprobieren.
@@ -277,114 +510,68 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
         document.getElementById("btnMarkdown").classList.toggle("active", mode === 'MD');
         document.getElementById("btnVCard").classList.toggle("active", mode === 'VC');
 
-        const txtGroup = document.getElementById("standardTextGroup");
-        const vcFormGroup = document.getElementById("vCardFormGroup");
-        const controlsGroup = document.getElementById("cryptoAndControlsGroup");
-        const btnKino = document.querySelector(".btn-kino");
+        const isVc = mode === 'VC';
+        document.getElementById("standardTextGroup").style.display = isVc ? "none" : "block";
+        document.getElementById("vCardFormGroup").style.display = isVc ? "block" : "none";
+        document.getElementById("cryptoAndControlsGroup").style.display = isVc ? "none" : "block";
+        document.querySelector(".btn-kino").style.display = isVc ? "none" : "block";
 
-        if (mode === 'VC') {
-            txtGroup.style.display = "none";
-            vcFormGroup.style.display = "block";
-            controlsGroup.style.display = "none";
-            btnKino.style.display = "none";
-        } else {
-            txtGroup.style.display = "block";
-            vcFormGroup.style.display = "none";
-            controlsGroup.style.display = "block";
-            btnKino.style.display = "block";
-        }
-
-        if (animationInterval || document.getElementById("stopBtn").style.display === "block") stopStreaming();
+        if (streamActive) stopStreaming();
     }
 
     function formatBytes(n) {
         return n >= 1024 ? (n / 1024).toFixed(2) + " KB" : n + " Bytes";
     }
 
+    function readSettings() {
+        const blockSize = parseInt(document.getElementById("chunkSize").value, 10) || 400;
+        const codes = parseInt(document.getElementById("codesPerFrame").value, 10) || 1;
+        let fps = parseInt(document.getElementById("fps").value, 10);
+        if (!Number.isFinite(fps)) fps = 15;
+        fps = Math.min(30, Math.max(1, fps));
+        return { blockSize, codes, fps };
+    }
+
+    function updateRateInfo() {
+        const { blockSize, codes, fps } = readSettings();
+        document.getElementById("rateInfo").innerText = (blockSize * codes * fps / 1024).toFixed(1) + " KB/s";
+    }
+
+    let statsTimer = null;
     function updateStats() {
-        const text = document.getElementById("textInput").value;
-        const words = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-        const bytes = new Blob([text]).size;
-        let compBytes = 0;
-        if (text.length > 0) {
-            compBytes = LZString.compressToEncodedURIComponent(sanitizeText(text)).length;
-        }
-        document.getElementById("textStats").innerText = `${words} Wörter, ${formatBytes(bytes)} (Komprimiert: ${formatBytes(compBytes)})`;
+        clearTimeout(statsTimer);
+        statsTimer = setTimeout(async () => {
+            const text = document.getElementById("textInput").value;
+            const words = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+            const raw = new TextEncoder().encode(sanitizeText(text));
+            let comp = 0;
+            if (raw.length > 0 && QRT.hasCompression()) {
+                try { comp = (await QRT.deflate(raw)).length; } catch (e) { comp = 0; }
+            }
+            const { blockSize } = readSettings();
+            const blocks = comp ? Math.ceil(comp / blockSize) : 0;
+            document.getElementById("textStats").innerText =
+                `${words} Wörter, ${formatBytes(raw.length)} (Komprimiert: ${formatBytes(comp)}, ${blocks} Blöcke)`;
+        }, 150);
     }
 
-    // Nur noch verlustfreie Normalisierung: Zeilenumbrüche vereinheitlichen, BOM und Zero-Width-Spaces entfernen.
-    // (Vorher wurden ALLE Zeichen ausserhalb von Latin-1 gelöscht – z.B. €, Emojis, griechische Buchstaben, ≤ ≥ …
-    //  LZString kann beliebiges Unicode komprimieren, das Löschen war also unnötig und zerstörte Daten.)
+    // Nur verlustfreie Normalisierung: Zeilenumbrüche vereinheitlichen, BOM und Zero-Width-Spaces entfernen.
     function sanitizeText(rawText) {
-        return rawText
-            .replace(/\r\n?/g, "\n")
-            .replace(/[﻿​]/g, "");
+        return rawText.replace(/\r\n?/g, "\n").replace(/[\uFEFF\u200B]/g, "");
     }
 
-    function chunkText(text, size) {
-        const chunks = [];
-        for (let i = 0; i < text.length; i += size) { chunks.push(text.slice(i, i + size)); }
-        return chunks;
-    }
-
-    // Zufällige Stream-ID (4 Zeichen, base36) aus kryptographischem Zufall
-    function newStreamId() {
-        const bytes = crypto.getRandomValues(new Uint8Array(4));
-        return Array.from(bytes, b => (b % 36).toString(36)).join("");
-    }
-
-    function bytesToBase64(bytes) {
-        let bin = "";
-        for (let i = 0; i < bytes.length; i += 0x8000) {
-            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-        }
-        return btoa(bin);
-    }
-
-    // AES-256-GCM mit PBKDF2-Schlüsselableitung (ersetzt CryptoJS: dort wurde der Schlüssel
-    // mit EINER MD5-Runde abgeleitet und es gab keinen Manipulationsschutz).
-    async function encryptPayload(plainText, passphrase) {
-        if (!window.crypto || !crypto.subtle) {
-            throw new Error("Web Crypto API nicht verfügbar. Bitte einen aktuellen Browser verwenden.");
-        }
-        const enc = new TextEncoder();
-        const salt = crypto.getRandomValues(new Uint8Array(16));
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-        const key = await crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
-            baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt"]
-        );
-        const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plainText)));
-        const out = new Uint8Array(salt.length + iv.length + cipher.length);
-        out.set(salt, 0);
-        out.set(iv, salt.length);
-        out.set(cipher, salt.length + iv.length);
-        return bytesToBase64(out);
-    }
-
-    // vCard-Sonderzeichen gemäss RFC 6350 escapen (verhindert, dass z.B. ein ";" im Namen
-    // oder ein Zeilenumbruch zusätzliche vCard-Felder einschleust)
+    // vCard-Sonderzeichen gemäss RFC 6350 escapen
     function vcEscape(value) {
-        return value
-            .replace(/\\/g, "\\\\")
-            .replace(/\r\n?|\n/g, "\\n")
-            .replace(/;/g, "\\;")
-            .replace(/,/g, "\\,");
+        return value.replace(/\\/g, "\\\\").replace(/\r\n?|\n/g, "\\n").replace(/;/g, "\\;").replace(/,/g, "\\,");
     }
 
     function buildVCardString() {
-        const vorname = document.getElementById("vcVorname").value.trim();
-        const nachname = document.getElementById("vcNachname").value.trim();
-        const telefon = document.getElementById("vcTelefon").value.trim();
-        const email = document.getElementById("vcEmail").value.trim();
-        const firma = document.getElementById("vcFirma").value.trim();
-
+        const v = id => document.getElementById(id).value.trim();
+        const vorname = v("vcVorname"), nachname = v("vcNachname"), telefon = v("vcTelefon"), email = v("vcEmail"), firma = v("vcFirma");
         if (!vorname && !nachname) {
             alert("Bitte gib mindestens einen Vor- oder Nachnamen ein.");
             return null;
         }
-
         let vcard = "BEGIN:VCARD\r\nVERSION:3.0\r\n";
         vcard += `N:${vcEscape(nachname)};${vcEscape(vorname)};;;\r\n`;
         vcard += `FN:${vcEscape([vorname, nachname].filter(Boolean).join(" "))}\r\n`;
@@ -395,27 +582,73 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
         return vcard;
     }
 
-    // Unterstützt "2, 15, 36" und Bereiche wie "10-14"
-    function parseTargetFrames(input, totalChunks) {
-        const result = new Set();
-        for (const raw of input.split(/[,;\s]+/)) {
-            const part = raw.trim();
-            if (!part) continue;
-            const range = part.match(/^(\d+)-(\d+)$/);
-            if (range) {
-                let a = parseInt(range[1], 10), b = parseInt(range[2], 10);
-                if (a > b) [a, b] = [b, a];
-                for (let n = Math.max(1, a); n <= Math.min(totalChunks, b); n++) result.add(n - 1);
-            } else if (/^\d+$/.test(part)) {
-                const n = parseInt(part, 10);
-                if (n >= 1 && n <= totalChunks) result.add(n - 1);
+    // ---------- Zeichnen: 1, 2 oder 4 QR-Codes pixelgenau auf ein Canvas ----------
+    function makeQr(text, mode, ecLevel, typeNumber = 0) {
+        const qr = qrcode(typeNumber, ecLevel);
+        qr.addData(text, mode);
+        qr.make();
+        return qr;
+    }
+
+    function drawCodes(qrs) {
+        const canvas = document.getElementById("qr-canvas");
+        const ctx = canvas.getContext("2d");
+        const cols = qrs.length >= 2 ? 2 : 1;
+        const rows = qrs.length >= 3 ? 2 : 1;
+        const m = qrs[0].getModuleCount();
+        const quiet = 4;                       // Pflicht-Ruhezone um jeden Code
+        const cell = m + quiet * 2;
+        const target = document.body.classList.contains('kino-mode')
+            ? Math.min(window.innerWidth * 0.95, window.innerHeight * 0.9 * cols / rows) * (window.devicePixelRatio || 1)
+            : 1200;
+        const px = Math.max(2, Math.floor(target / (cols * cell)));  // ganze Pixel pro Modul = scharf
+        const w = cols * cell * px, h = rows * cell * px;
+        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "#000";
+        qrs.forEach((qr, i) => {
+            const ox = (i % cols) * cell * px + quiet * px;
+            const oy = Math.floor(i / cols) * cell * px + quiet * px;
+            for (let r = 0; r < m; r++) {
+                for (let c = 0; c < m; c++) {
+                    if (qr.isDark(r, c)) ctx.fillRect(ox + c * px, oy + r * px, px, px);
+                }
             }
-        }
-        return Array.from(result).sort((x, y) => x - y);
+        });
+    }
+
+    function clearCanvas() {
+        const canvas = document.getElementById("qr-canvas");
+        canvas.width = 1; canvas.height = 1;
     }
 
     function setBusy(busy) {
         document.querySelectorAll("#actionBtns button").forEach(b => b.disabled = busy);
+    }
+
+    function showRunningUi() {
+        document.getElementById("actionBtns").style.display = "none";
+        document.getElementById("stopBtn").style.display = "block";
+        streamActive = true;
+    }
+
+    async function buildStream(text, pin, blockSize, isMarkdown) {
+        if (!QRT.hasCompression() || !window.crypto || !crypto.subtle) {
+            throw new Error("Dieser Browser ist zu alt (CompressionStream / Web Crypto fehlt).");
+        }
+        let data = await QRT.deflate(new TextEncoder().encode(text));
+        let flags = isMarkdown ? QRT.FLAG_MARKDOWN : 0;
+        if (pin !== "") {
+            document.getElementById("status").innerText = "Verschlüssele (AES-256-GCM)...";
+            data = await QRT.encrypt(data, pin);
+            flags |= QRT.FLAG_ENCRYPTED;
+        }
+        const streamId = crypto.getRandomValues(new Uint32Array(1))[0];
+        const sum = await QRT.checksum(data);
+        // Kurze Texte: Block nicht grösser als die Daten selbst (kleinerer, besser lesbarer Code)
+        const effectiveSize = Math.min(blockSize, data.length);
+        return { encoder: new QRT.FountainEncoder(data, { blockSize: effectiveSize, flags, streamId, sum }), nextIndex: 0, encrypted: pin !== "", bytes: data.length };
     }
 
     async function startStreaming(useKinoMode) {
@@ -424,13 +657,11 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
         if (currentMode === 'VC') {
             const vCardString = buildVCardString();
             if (!vCardString) return;
-
-            const qr = new QRious({ size: 800, level: 'M' });
-            qr.value = vCardString;
-            document.getElementById("qr-image").src = qr.toDataURL();
+            // vCard bleibt ein normaler QR-Code (UTF-8), damit jede Handy-Kamera ihn erkennt
+            qrcode.fixedMask = null; // vCard: beste Maske normal berechnen
+            drawCodes([makeQr(vCardString, 'Byte', 'M')]);
             document.getElementById("status").innerText = "Visitenkarte aktiv. Scanne mit der normalen Handy-Kamera!";
-            document.getElementById("actionBtns").style.display = "none";
-            document.getElementById("stopBtn").style.display = "block";
+            showRunningUi();
             return;
         }
 
@@ -438,56 +669,27 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
         const pinInput = document.getElementById("pinInput");
         const pin = pinInput.value;
         const shouldRemember = document.getElementById("rememberPin").checked;
-        const targetFramesInput = document.getElementById("targetFrames").value.trim();
-
         if (!rawText) return alert("Bitte gib zuerst einen Text ein.");
 
-        const maxChunkSize = parseInt(document.getElementById("chunkSize").value, 10) || 300;
-        let fps = parseInt(document.getElementById("fps").value, 10);
-        if (!Number.isFinite(fps)) fps = 15;
-        fps = Math.min(30, Math.max(1, fps));
+        const { blockSize, codes, fps } = readSettings();
         document.getElementById("fps").value = fps;
-
-        document.getElementById("status").innerText = "Verarbeite Daten und berechne Frames...";
+        document.getElementById("status").innerText = "Verarbeite Daten...";
         setBusy(true);
 
         try {
             const cleanedText = sanitizeText(rawText);
             // Nur ein Hash wird gemerkt – der PIN selbst bleibt nicht im Speicher liegen
-            const keyBytes = new TextEncoder().encode([currentMode, maxChunkSize, cleanedText, pin].join("\u0000"));
-            const buildKey = bytesToBase64(new Uint8Array(await crypto.subtle.digest("SHA-256", keyBytes)));
-
+            const keyBytes = new TextEncoder().encode([currentMode, blockSize, cleanedText, pin].join("\u0000"));
+            const buildKey = QRT.base45Encode(new Uint8Array(await crypto.subtle.digest("SHA-256", keyBytes)));
             if (!lastBuild || lastBuild.key !== buildKey) {
-                const compressedText = LZString.compressToEncodedURIComponent(cleanedText);
-                let transmitMode = (currentMode === 'TX') ? 'CX' : 'CM';
-                let finalPayloadText = compressedText;
-
-                if (pin !== "") {
-                    document.getElementById("status").innerText = "Verschlüssele (AES-256-GCM)...";
-                    finalPayloadText = await encryptPayload(compressedText, pin);
-                    transmitMode = (currentMode === 'TX') ? 'EX' : 'EM';
-                }
-
-                const textChunks = chunkText(finalPayloadText, maxChunkSize);
-                const totalChunks = textChunks.length;
-                const streamId = newStreamId();
-                const padLen = Math.max(3, String(totalChunks).length);
-                const qr = new QRious({ size: 800, level: 'L' });
-                const builtFrames = [];
-
-                for (let i = 0; i < totalChunks; i++) {
-                    const paddedCurrent = String(i + 1).padStart(padLen, '0');
-                    const paddedTotal = String(totalChunks).padStart(padLen, '0');
-                    qr.value = `${paddedCurrent}/${paddedTotal}|${transmitMode}|${streamId}|${textChunks[i]}`;
-                    builtFrames.push(qr.toDataURL());
-                }
-                lastBuild = { key: buildKey, frames: builtFrames, transmitMode, streamId };
+                lastBuild = await buildStream(cleanedText, pin, blockSize, currentMode === 'MD');
+                lastBuild.key = buildKey;
             }
         } catch (err) {
-            setBusy(false);
             document.getElementById("status").innerText = "❌ Fehler: " + err.message;
             return;
         } finally {
+            setBusy(false);
             if (!shouldRemember) {
                 pinInput.value = "";
                 pinInput.type = "password";
@@ -495,72 +697,51 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
                 updatePinHint();
             }
         }
-        setBusy(false);
 
-        frames = lastBuild.frames;
-        const transmitMode = lastBuild.transmitMode;
-        const totalChunks = frames.length;
-
-        document.getElementById("actionBtns").style.display = "none";
-        document.getElementById("stopBtn").style.display = "block";
-
-        playbackSequence = targetFramesInput !== "" ? parseTargetFrames(targetFramesInput, totalChunks) : [];
-        let isPrecisionMode = playbackSequence.length > 0;
-        if (!isPrecisionMode) {
-            playbackSequence = Array.from({length: totalChunks}, (_, i) => i);
-        }
-
-        sequenceIndex = 0;
-        isShuffling = false;
-        let lastShownIndex = -1;
-
-        const tick = () => {
-            const actualFrameIndex = playbackSequence[sequenceIndex];
-            // Einzel-Frame nicht dauernd neu setzen -> kein Flackern
-            if (actualFrameIndex !== lastShownIndex) {
-                document.getElementById("qr-image").src = frames[actualFrameIndex];
-                lastShownIndex = actualFrameIndex;
-            }
-
-            let statusText = `Sende Frame ${actualFrameIndex + 1} von ${totalChunks} (${fps} Hz) · Stream ${lastBuild.streamId}`;
-            if (transmitMode === 'EX' || transmitMode === 'EM') statusText += " 🔒";
-            if (useKinoMode) statusText += " (Klick zum Beenden)";
-            if (isPrecisionMode) statusText += " 🎯 (Precision Mode)";
-            else if (isShuffling) statusText += " 🔀";
-
-            document.getElementById("status").innerText = statusText;
-            sequenceIndex++;
-
-            if (sequenceIndex >= playbackSequence.length) {
-                sequenceIndex = 0;
-                if (!isPrecisionMode && playbackSequence.length > 1) {
-                    isShuffling = true;
-                    shuffleArray(playbackSequence);
-                }
-            }
-        };
-        tick();
-        animationInterval = setInterval(tick, 1000 / fps);
-
+        showRunningUi();
         if (useKinoMode) {
             document.body.classList.add('kino-mode');
             if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log("Vollbild blockiert: " + err.message);
-                });
+                document.documentElement.requestFullscreen().catch(err => console.log("Vollbild blockiert: " + err.message));
             }
         }
+
+        const build = lastBuild;
+        const K = build.encoder.K;
+        const shownCodes = Math.min(codes, K); // bei wenigen Blöcken nicht mehr Codes zeigen als nötig
+        // Geschwindigkeit: Alle Pakete eines Streams sind gleich lang -> QR-Version und Maske
+        // nur einmal bestimmen statt bei jedem Code neu (spart ~90 % Rechenzeit pro Code)
+        qrcode.fixedMask = null;
+        const probe = makeQr(build.encoder.packet(0), 'Alphanumeric', 'L');
+        const typeNumber = (probe.getModuleCount() - 17) / 4;
+        qrcode.fixedMask = probe.maskPattern;
+
+        const tick = () => {
+            const qrs = [];
+            for (let i = 0; i < shownCodes; i++) {
+                qrs.push(makeQr(build.encoder.packet(build.nextIndex++), 'Alphanumeric', 'L', typeNumber));
+            }
+            drawCodes(qrs);
+
+            const sent = build.nextIndex;
+            const phase = sent <= K ? `Durchgang 1: ${Math.min(sent, K)}/${K}` : `Fountain-Paket #${sent}`;
+            let statusText = `${phase} · ${K} ${K === 1 ? 'Block' : 'Blöcke'} · ${shownCodes}×${fps} Hz`;
+            if (build.encrypted) statusText += " 🔒";
+            if (useKinoMode) statusText += " (Klick zum Beenden)";
+            document.getElementById("status").innerText = statusText;
+        };
+        tick();
+        animationInterval = setInterval(tick, 1000 / fps);
     }
 
     function stopStreaming() {
         if (animationInterval) clearInterval(animationInterval);
         animationInterval = null;
-        frames = [];
+        streamActive = false;
         document.getElementById("actionBtns").style.display = "flex";
         document.getElementById("stopBtn").style.display = "none";
         document.getElementById("status").innerText = "Stream gestoppt";
-        document.getElementById("qr-image").src = EMPTY_GIF;
-
+        clearCanvas();
         document.body.classList.remove('kino-mode');
         if (document.fullscreenElement && document.exitFullscreen) {
             document.exitFullscreen();
@@ -568,19 +749,16 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
     }
 
     function exitKinoModeOnClick() {
-        if (document.body.classList.contains('kino-mode')) {
-            stopStreaming();
-        }
+        if (document.body.classList.contains('kino-mode')) stopStreaming();
     }
 
     document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && document.body.classList.contains('kino-mode')) {
-            stopStreaming();
-        }
+        if (!document.fullscreenElement && document.body.classList.contains('kino-mode')) stopStreaming();
     });
 
     // Daten nicht im Speicher liegen lassen, wenn der Tab geschlossen wird
-    window.addEventListener('pagehide', () => { lastBuild = null; frames = []; });
+    window.addEventListener('pagehide', () => { lastBuild = null; });
+    updateRateInfo();
 </script>
 
 </body>

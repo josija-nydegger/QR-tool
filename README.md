@@ -17,10 +17,10 @@ https://josija-nydegger.github.io/QR-tool/QR-Reader.html
 
 ---
 
-## 🚀 Der "Sweet Spot" (Empfehlung)
-* **Geschwindigkeit:** 15 Hz (15 Frames pro Sekunde) – absolut flüssig für moderne Smartphones.
-* **Paketgrösse:** Gross (300 Zeichen pro Frame - Idealer Sweet Spot zwischen Datendichte und Scan-Scharfe).
-* **Performance-Maximum:** Unter perfekten Bedingungen und mit moderner Hardware sind bis zu **20–25 Hz** stabil möglich! Einzelne QR-Codes (wie Visitenkarten) werden in wenigen Millisekunden instant erfasst.
+## 🚀 Empfohlene Einstellungen
+* **Start:** Paketgrösse *Normal (400 B)*, 1 Code pro Bild, 15 Bilder/Sek. ≈ 6 KB/s – sicher auf fast allen Handys.
+* **Schneller:** Im **Kino-Modus** Paketgrösse *Gross (700 B)* oder *Riesig (1000 B)* und **2 oder 4 Codes pro Bild** ausprobieren. Damit sind theoretisch 20–60 KB/s drin; in der Praxis begrenzt die Kamera bzw. die Scan-Geschwindigkeit des Handys.
+* **Faustregel:** Wenn der Empfänger kaum noch Pakete zählt, Paketgrösse oder Anzahl Codes eine Stufe zurück. Dank Fountain-Code ist es egal, wenn einzelne Bilder verloren gehen.
 
 ---
 
@@ -32,35 +32,44 @@ Das Tool besteht aus zwei simplen, schlanken und autarken HTML-Dateien:
 Diese Datei wird lokal auf dem Computer (z. B. Mac) ausgeführt.
 * **Modus-Vielfalt:** Unterstützt reinen Text (`Raw Text`), formatiertes `Markdown` (inkl. LaTeX-Formeln) sowie ein dediziertes Formular für `vCard-Visitenkarten`.
 * **Verschlüsselung (AES-256-GCM):** Optional via eingebauter Web Crypto API des Browsers. Der Schlüssel wird mit PBKDF2-SHA256 (600'000 Runden) aus dem PIN abgeleitet, GCM erkennt falsche PINs und manipulierte Daten zuverlässig. Eine Stärke-Anzeige warnt vor zu kurzen PINs. Der PIN wird auf Wunsch für die Sitzung im RAM gemerkt.
-* **100 % offline:** Die Bibliotheken (QRious, lz-string) sind direkt in die Datei eingebettet, eine Content-Security-Policy verbietet der Seite jede Netzwerkverbindung.
-* **Turbo-Kompression:** Nutzt die `lz-string`-Bibliothek, um Texte vor dem Senden radikal zu komprimieren (spart bis zu 50 % der Frame-Anzahl).
-* **Precision Targeting (🎯 Gezielte Frames):** Wenn am Ende eines riesigen Streams noch einzelne Frames fehlen (z. B. durch Wackeln), können die Nummern (z. B. `2, 15, 36` oder Bereiche wie `10-14`) manuell eingegeben werden. Solange Text und PIN gleich bleiben, werden exakt dieselben Frames erneut gesendet. Der Streamer isoliert diese sofort und sendet nur noch die Lücken in Dauerschleife.
-* **Pre-Rendering & Kino-Modus:** Berechnet alle QR-Codes vorab, um Browser-Abstürze zu verhindern. Der *Kino-Modus* blendet die Benutzeroberfläche komplett aus und maximiert den QR-Code bildschirmfüllend für maximale Distanzen. Ein statischer Einzel-Frame blinkt nicht, sondern bleibt stabil stehen.
+* **100 % offline:** Die QR-Bibliothek (qrcode-generator) ist direkt in die Datei eingebettet, Kompression und Verschlüsselung sind im Browser eingebaut. Eine Content-Security-Policy verbietet der Seite jede Netzwerkverbindung.
+* **Kompression:** Deflate über die eingebaute `CompressionStream`-API (bei normalem Text ~20 % kleiner als das frühere lz-string).
+* **Fountain-Code (🌊 keine fehlenden Frames mehr):** Zuerst wird jeder Datenblock einmal direkt gesendet, danach endlos neue, zufällige XOR-Kombinationen aller Blöcke. Der Empfänger braucht nur so viele *beliebige* Pakete, wie es Blöcke gibt (plus meist 1–2). Welche Bilder verpasst werden, spielt keine Rolle – das frühere manuelle Nachsenden einzelner Frames ist damit überflüssig.
+* **Mehrere Codes pro Bild:** 1, 2 oder 4 QR-Codes gleichzeitig vervielfachen den Durchsatz.
+* **Dichtere Codes (Base45):** Daten werden im kompakten QR-Alphanumerik-Modus kodiert – rund 20 % mehr Nutzdaten pro Code als mit Base64.
+* **Kino-Modus:** Blendet die Benutzeroberfläche aus und zeigt die Codes bildschirmfüllend und pixelgenau. Stoppen und Neustarten mit gleichem Text und PIN setzt den Stream fort, statt neu zu beginnen.
 
 ### 2. `QR-Reader.html` (Der Empfänger)
 Diese Datei wird auf dem Smartphone ausgeführt und über GitHub Pages bereitgestellt (oder kann komplett lokal aus der Dateien-App gestartet werden).
-* **Echtzeit-Dekodierung via WASM:** Analysiert den Kamerastream mit 30 FPS über die ultraschnelle `ZBar-C++`-Engine, die mittels WebAssembly direkt auf Hardware-Niveau läuft.
-* **Intelligente Live-Matrix mit CSS-Sortierung (🔄 Dynamic Order):** Zeigt alle benötigten Frames als Kacheln an. **Der Clou:** Noch ungescannte (graue) Kacheln werden per Grafikkarten-Beschleunigung (CSS Grid Order) *automatisch immer nach oben sortiert*, während erfolgreich gescannte (grüne) Kacheln nach unten wegrutschen. Man sieht fehlende Frames sofort auf einen Blick.
-* **Auto-Entschlüsselung & Decompress:** Erkennt verschlüsselte (`EX`/`EM`) oder komprimierte Datenströme vollautomatisch. Bei verschlüsselten Streams öffnet sich ein PIN-Eingabefeld direkt auf der Karte.
+* **Echtzeit-Dekodierung via WASM:** Analysiert den Kamerastream (1080p) mit der `ZBar`-Engine als WebAssembly und liest **alle** QR-Codes in einem Bild.
+* **Fountain-Decoder:** Setzt die Daten per Gauss-Elimination zusammen, sobald genug Pakete da sind, und prüft das Ergebnis mit einer SHA-256-Prüfsumme.
+* **Intelligente Live-Matrix mit CSS-Sortierung (🔄 Dynamic Order):** Zeigt den Fortschritt als Kacheln an (eine Kachel pro rekonstruierbarem Block). **Der Clou:** Noch ungescannte (graue) Kacheln werden per Grafikkarten-Beschleunigung (CSS Grid Order) *automatisch immer nach oben sortiert*, während erfolgreich gescannte (grüne) Kacheln nach unten wegrutschen. Man sieht den Fortschritt sofort auf einen Blick.
+* **Auto-Entschlüsselung & Decompress:** Erkennt verschlüsselte und komprimierte Datenströme vollautomatisch. Bei verschlüsselten Streams öffnet sich ein PIN-Eingabefeld direkt auf der Karte.
 * **Gehärtet:** Markdown wird mit `DOMPurify` bereinigt (kein Script-Injection über präparierte QR-Codes), alle Bibliotheken sind auf feste Versionen mit Integritäts-Hash (SRI) gepinnt, die Kamera wird nach dem Empfang ausgeschaltet.
 * **Markdown, KaTeX & PDF-Export (📄):** Rendert Markdown-Code inklusive harter Zeilenumbrüche (`breaks: true`) und komplexer Mathematik via `KaTeX`. Im Markdown-Modus erscheint ein **PDF-Export-Button**, der über die native Druck-Engine des Smartphones ein gestochen scharfes, perfekt formatiertes PDF-Dokument generiert – ganz ohne schweren Code-Ballast.
 * **System-Integration:** Bietet haptisches Feedback (Vibration bei Erfolg/Fehler) sowie direkte Buttons für die Zwischenablage (`Kopieren 📋`) und das native OS-Teilen-Menü (`Teilen 📤`).
 
 ---
 
-## 📋 Übertragungsprotokoll (Header)
+## 📋 Übertragungsprotokoll (v3)
 
-Jedes Datenpaket (Protokoll v2) trägt einen Header, den der Empfänger automatisch ausliest:
-`[Aktueller Frame]/[Gesamt-Frames]|[Modus-Flag]|[Stream-ID]|[Datenpaket]`
+Jeder QR-Code enthält `QR3:` gefolgt von Base45-kodierten Bytes: einem 20-Byte-Header und einem Datenblock.
 
-**Beispiel:** `001/005|CM|k3x9|KompakterZahlensalat...`
-* `001/005`: Frame 1 von insgesamt 5 Paketen.
-* `k3x9`: Zufällige Stream-ID. Verhindert, dass Frames zweier verschiedener Streams vermischt werden.
-* **Die Modus-Flags:** * `TX` / `MD`: Rohtext / Unkomprimiertes Markdown
-  * `CX` / `CM`: Komprimierter Text / Komprimiertes Markdown
-  * `EX` / `EM`: Verschlüsselter Text / Verschlüsseltes Markdown. Datenteil = Base64( Salt 16 B · IV 12 B · AES-256-GCM-Chiffretext )
+| Bytes | Inhalt |
+|---|---|
+| 0 | Version (3) |
+| 1 | Flags: Bit 0 = Markdown, Bit 1 = verschlüsselt |
+| 2–5 | Zufällige Stream-ID (verhindert das Vermischen zweier Streams) |
+| 6–9 | Gesamtlänge der Daten |
+| 10–11 | Blockgrösse |
+| 12–15 | Paketnummer (0 … K−1 = Blöcke direkt, ab K = Fountain-Kombinationen) |
+| 16–19 | Prüfsumme (erste 4 Bytes SHA-256 der Daten) |
 
-vCard-Visitenkarten werden **ohne** diesen Header als Standard-vCard gesendet, damit jede normale Handykamera sie direkt als Kontakt erkennt.
+**Daten:** `Deflate(UTF-8-Text)`, bei gesetztem PIN danach `Salt (16 B) · IV (12 B) · AES-256-GCM-Chiffretext` (Schlüssel via PBKDF2-SHA256, 600'000 Runden).
+
+**Fountain:** Welche Blöcke in Paket *n* XOR-verknüpft sind, wird aus Stream-ID und Paketnummer per Pseudozufall abgeleitet – Sender und Empfänger berechnen dieselbe Auswahl.
+
+vCard-Visitenkarten werden **ohne** dieses Protokoll als Standard-vCard gesendet, damit jede normale Handykamera sie direkt als Kontakt erkennt.
 
 ---
 
@@ -88,7 +97,7 @@ vCard-Visitenkarten werden **ohne** diesen Header als Standard-vCard gesendet, d
 1. Öffne den **QR-Streamer** auf dem PC, wähle den Modus (Text, Markdown oder vCard) und füge den Inhalt ein. Optional einen PIN für die Verschlüsselung vergeben.
 2. Klicke am PC auf **Stream starten** (oder *Kino-Modus* für ein grosses Bild).
 3. Öffne den **QR-Reader** auf dem Smartphone und richte die Kamera auf den Bildschirm.
-4. Die Kacheln färben sich grün und sortieren sich live nach unten. Sollten am Ende Frames fehlen, stoppe den Stream kurz am Mac, tippe die oben verbliebenen grauen Nummern in das Feld **"Gezielte Frames"** und starte den Stream kurz erneut.
+4. Die Kacheln färben sich grün. Einfach laufen lassen, bis alle grün sind – verpasste Bilder werden automatisch durch spätere Pakete ersetzt.
 5. Nach erfolgreichem Scan fährt die elegante Ergebnis-Karte hoch. Bei vergebenem PIN diesen kurz auf dem Smartphone eintippen.
 6. Nutze **Kopieren**, **Teilen** oder den **PDF-Export** (nur im Markdown-Modus verfügbar), um das Ergebnis weiterzuverarbeiten.
 
@@ -103,6 +112,6 @@ vCard-Visitenkarten werden **ohne** diesen Header als Standard-vCard gesendet, d
 
 **Wichtig – was die Verschlüsselung NICHT kann:** Jeder, der den Bildschirm sieht oder filmt (Kollegen, Überwachungskamera, Spiegelung im Fenster), besitzt den verschlüsselten Datenstrom und kann den PIN offline beliebig oft durchprobieren. Ein 4-stelliger Zahlen-PIN ist trotz PBKDF2 in Minuten geknackt. Für sensible Daten eine **lange Passphrase** (z. B. 4–5 zufällige Wörter) verwenden und den PIN auf einem anderen Weg mitteilen.
 
-**Hinweis zur Kompatibilität:** Sender und Empfänger müssen beide auf Protokoll v2 aktualisiert sein. Unverschlüsselte Streams alter Sender werden noch gelesen, alte CryptoJS-verschlüsselte Streams nicht mehr.
+**Hinweis zur Kompatibilität:** Sender und Empfänger müssen beide auf Protokoll v3 aktualisiert sein. Erkennt der Reader einen alten Sender (v1/v2), zeigt er einen Hinweis zum Aktualisieren. Benötigt werden iOS 16.4+ bzw. ein aktuelles Chrome/Firefox/Edge.
 
-**Lizenz-Hinweis:** `QR-Streamer.html` enthält die Bibliothek QRious (GPL-3.0) und lz-string (MIT).
+**Lizenz-Hinweis:** `QR-Streamer.html` enthält die Bibliothek qrcode-generator von Kazuhiko Arase (MIT) mit einer kleinen, markierten Anpassung.
