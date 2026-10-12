@@ -90,10 +90,13 @@
         .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
         button { flex: 1 1 calc(33.33% - 6px); min-width: 85px; padding: 12px 6px; color: white; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
         button:active { transform: scale(0.96); }
+        .button-group button { white-space: nowrap; padding: 12px 4px; }
         
         .btn-copy { background-color: #0071e3; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2); }
         .btn-share { background-color: #5856d6; box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
         .btn-pdf { background-color: #ff9500; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.2); }
+        .btn-txt { background-color: #ff9500; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.2); }
+        .btn-csv { background-color: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2); }
         
         .btn-reset { background-color: #f5f5f7; color: #ff3b30; font-weight: 500; flex: 1 1 100%; margin-top: 4px; }
         .btn-reset:hover { background-color: #e5e5ea; }
@@ -146,6 +149,9 @@
             <button class="btn-copy" id="copyBtn" onclick="copyText()">Kopieren 📋</button>
             <button class="btn-share" id="shareBtn" onclick="shareText()">Teilen 📤</button>
             <button class="btn-pdf" id="pdfBtn" onclick="exportToPDF()" style="display: none;">PDF Export 📄</button>
+            <button class="btn-txt" id="txtBtn" onclick="exportToTXT()" style="display: none;">TXT Export 💾</button>
+            <button class="btn-txt" id="mdBtn" onclick="exportToMD()" style="display: none;">MD Export 📝</button>
+            <button class="btn-csv" id="csvBtn" onclick="exportToCSV()" style="display: none;">CSV Export 📊</button>
             <button class="btn-reset" onclick="resetScanner()">Neu scannen</button>
         </div>
     </div>
@@ -421,6 +427,7 @@
     let scanTimestamps = [];
     let packetCount = 0;
     let legacyWarned = false;
+    let detectedCsv = "";      // erkannte CSV-Zeilen (original, für den CSV-Export)
     let receptionDone = false; // nach Abschluss keine Pakete mehr annehmen (bis "Neu scannen")
 
     let videoElement = null;
@@ -590,7 +597,7 @@
         p.className = "error-text";
         p.innerText = message;
         content.appendChild(p);
-        ["copyBtn", "shareBtn", "pdfBtn"].forEach(id => document.getElementById(id).style.display = "none");
+        ["copyBtn", "shareBtn", ...EXPORT_BUTTONS].forEach(id => document.getElementById(id).style.display = "none");
         document.getElementById("cardButtons").style.display = "flex";
         revealCard();
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
@@ -687,6 +694,7 @@
 
     // Der intelligente und fehlertolerante CSV-Detektor
     function formatIfCsv(text) {
+        detectedCsv = "";
         const lines = text.trim().split('\n');
         if (lines.length < 3) return text;
 
@@ -719,6 +727,7 @@
         }
 
         if (validCsvLines.length < 2) return text;
+        detectedCsv = validCsvLines.join("\n");
 
         let markdownTable = "";
         validCsvLines.forEach((line, index) => {
@@ -750,7 +759,8 @@
 
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
-        const pdfBtn = document.getElementById("pdfBtn");
+        const show = id => document.getElementById(id).style.display = "flex";
+        hideExportButtons();
 
         if (isMarkdownStream) {
             const textForDisplay = formatIfCsv(finalDecodedText);
@@ -763,7 +773,9 @@
             });
 
             headerArea.innerText = isCsv ? "📊 Empfang: CSV Tabelle" : "📝 Empfang: Markdown Dokument";
-            pdfBtn.style.display = "flex";
+            show("pdfBtn");                 // Markdown-Modus: PDF + Original als .md
+            show("mdBtn");
+            if (isCsv) show("csvBtn");      // erkannte Tabelle zusätzlich als .csv
             contentArea.style.whiteSpace = "normal";
 
             if (typeof renderMathInElement === "function") {
@@ -779,12 +791,55 @@
         } else {
             contentArea.textContent = finalDecodedText;
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-            pdfBtn.style.display = "none";
+            show("txtBtn");                 // Text-Modus: Export als .txt
             contentArea.style.whiteSpace = "pre-wrap";
         }
 
         document.getElementById("copyBtn").style.display = "flex";
         if (navigator.share) document.getElementById("shareBtn").style.display = "flex";
+    }
+
+    // ---------- Datei-Export ----------
+    const EXPORT_BUTTONS = ["pdfBtn", "txtBtn", "mdBtn", "csvBtn"];
+
+    function hideExportButtons() {
+        EXPORT_BUTTONS.forEach(id => document.getElementById(id).style.display = "none");
+    }
+
+    function downloadFile(content, extension, mimeType) {
+        if (!content) return;
+        const now = new Date();
+        const pad = n => String(n).padStart(2, "0");
+        const fileName = `QR-Empfang_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}.${extension}`;
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // URL erst später freigeben, sonst bricht der Download auf manchen Geräten ab
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        if (navigator.vibrate) navigator.vibrate(50);
+    }
+
+    // Text-Modus: empfangener Text unverändert als .txt (UTF-8)
+    function exportToTXT() {
+        downloadFile(rawAssembledText, "txt", "text/plain;charset=utf-8");
+    }
+
+    // Markdown-Modus: Originaltext inkl. Formatierung als .md (z.B. für Obsidian, Notion, VS Code)
+    function exportToMD() {
+        downloadFile(rawAssembledText, "md", "text/markdown;charset=utf-8");
+    }
+
+    // Erkannte Tabelle als .csv. Das unsichtbare BOM am Anfang sorgt dafür,
+    // dass Excel Umlaute korrekt anzeigt; Numbers/Google Sheets ignorieren es.
+    function exportToCSV() {
+        if (!detectedCsv) return;
+        downloadFile("\uFEFF" + detectedCsv.replace(/\n/g, "\r\n") + "\r\n", "csv", "text/csv;charset=utf-8");
     }
 
     function exportToPDF() {
@@ -806,7 +861,8 @@
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             document.getElementById("cardButtons").style.display = "flex";
-            document.getElementById("pdfBtn").style.display = "none";
+            hideExportButtons();
+            detectedCsv = "";
 
             decoder = null;
             rawAssembledText = "";

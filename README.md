@@ -47,6 +47,7 @@ Diese Datei wird auf dem Smartphone ausgeführt und über GitHub Pages bereitges
 * **Auto-Entschlüsselung & Decompress:** Erkennt verschlüsselte und komprimierte Datenströme vollautomatisch. Bei verschlüsselten Streams öffnet sich ein PIN-Eingabefeld direkt auf der Karte.
 * **Gehärtet:** Markdown wird mit `DOMPurify` bereinigt (kein Script-Injection über präparierte QR-Codes), alle Bibliotheken sind auf feste Versionen mit Integritäts-Hash (SRI) gepinnt, die Kamera wird nach dem Empfang ausgeschaltet.
 * **Markdown, KaTeX & PDF-Export (📄):** Rendert Markdown-Code inklusive harter Zeilenumbrüche (`breaks: true`) und komplexer Mathematik via `KaTeX`. Im Markdown-Modus erscheint ein **PDF-Export-Button**, der über die native Druck-Engine des Smartphones ein gestochen scharfes, perfekt formatiertes PDF-Dokument generiert – ganz ohne schweren Code-Ballast.
+* **Datei-Export (💾):** Text-Modus → `.txt`. Markdown-Modus → `.md` (Originaltext für Obsidian, Notion, VS Code). Erkennt der Reader eine Tabelle → zusätzlich `.csv` (öffnet sich mit korrekten Umlauten in Excel, Numbers und Google Sheets). Alle Dateien in UTF-8, z. B. direkt in die Dateien-App.
 * **System-Integration:** Bietet haptisches Feedback (Vibration bei Erfolg/Fehler) sowie direkte Buttons für die Zwischenablage (`Kopieren 📋`) und das native OS-Teilen-Menü (`Teilen 📤`).
 
 ---
@@ -99,7 +100,7 @@ vCard-Visitenkarten werden **ohne** dieses Protokoll als Standard-vCard gesendet
 3. Öffne den **QR-Reader** auf dem Smartphone und richte die Kamera auf den Bildschirm.
 4. Die Kacheln färben sich grün. Einfach laufen lassen, bis alle grün sind – verpasste Bilder werden automatisch durch spätere Pakete ersetzt.
 5. Nach erfolgreichem Scan fährt die elegante Ergebnis-Karte hoch. Bei vergebenem PIN diesen kurz auf dem Smartphone eintippen.
-6. Nutze **Kopieren**, **Teilen** oder den **PDF-Export** (nur im Markdown-Modus verfügbar), um das Ergebnis weiterzuverarbeiten.
+6. Nutze **Kopieren**, **Teilen** oder die Export-Buttons (**TXT** im Text-Modus, **PDF** und **MD** im Markdown-Modus, **CSV** bei Tabellen), um das Ergebnis weiterzuverarbeiten.
 
 ---
 
