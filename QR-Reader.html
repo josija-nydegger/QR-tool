@@ -3,15 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Sicherheit: Skripte nur von jsDelivr, keine Datenverbindungen nach aussen (connect-src 'none'),
+         d.h. selbst eingeschleuster Code könnte empfangene Daten nicht per fetch/XHR wegschicken. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+    <meta name="referrer" content="no-referrer">
     <title>QR-Code Datenüberträger (ZBar WASM-Edition)</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@latest/dist/index.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+    <!-- Alle Bibliotheken mit fester Version + Integritäts-Hash (SRI): wird eine Datei auf dem CDN
+         verändert, verweigert der Browser die Ausführung. Vorher: "@latest" ohne Prüfung. -->
+    <!-- ZBar "inlined"-Build: das WASM ist in der JS-Datei enthalten und damit vom SRI-Hash mit abgedeckt -->
+    <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js" integrity="sha384-EbGJzkj+gTEnDjpWZJGfQ2RXHaIdm5zLuvFqtJI6cdAsjM8VxIIdmx8YG+Qhw1Hn" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js" integrity="sha384-QsSpx6a0USazT7nK7w8qXDgpSAPhFsb2XtpoLFQ5+X2yFN6hvCKnwEzN8M5FWaJb" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-GvrOXuhMATgEsSwCs4smul74iXGOixntILdUW9XmUC6+HX0sLNAK3q71HotJqlAn" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" integrity="sha384-cpW21h6RZv/phavutF+AuVYrr+dA8xD9zs6FwLpaCct6O9ctzYFfFr4dgmgccOTx" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <!-- CryptoJS entfernt: Entschlüsselung läuft jetzt über die eingebaute Web Crypto API des Browsers -->
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; padding: 15px; margin: 0; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
@@ -97,6 +105,8 @@
         .crypto-ui input { width: 100%; padding: 14px; margin-bottom: 15px; border-radius: 10px; border: 1px solid #d2d2d7; box-sizing: border-box; font-size: 18px; text-align: center; font-family: monospace; letter-spacing: 3px; }
         .crypto-ui button { background-color: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2); width: 100%; }
         .crypto-error { color: #ff3b30; margin-top: 15px; display: none; font-weight: 600; }
+        .crypto-ui button:disabled { opacity: 0.6; cursor: wait; }
+        .error-text { color: #ff3b30; font-weight: 600; }
 
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
@@ -143,67 +153,109 @@
 </div>
 
 <script>
-    let receivedChunks = {};
+    // ===== Protokoll v2 =====
+    // Header: [Frame]/[Total]|[Modus]|[Stream-ID]|[Daten]
+    // Ältere Sender ohne Stream-ID werden für unverschlüsselte Streams weiterhin akzeptiert.
+    const PBKDF2_ITERATIONS = 600000;
+    const ALLOWED_MODES = ['TX', 'MD', 'CX', 'CM', 'EX', 'EM'];
+    const MAX_FRAMES = 9999;
+    const FRAME_REGEX = /^(\d{1,5})\/(\d{1,5})\|([A-Z]{2})\|(?:([0-9a-z]{4})\|)?([\s\S]*)$/;
+
+    let receivedChunks = new Map();
     let totalChunksCount = 0;
-    let streamMode = 'TX'; 
-    let rawAssembledText = ""; 
+    let currentStreamKey = null;
+    let streamMode = 'TX';
+    let isLegacyStream = false;
+    let rawAssembledText = "";
     let encryptedPayloadBase64 = "";
     let scanTimestamps = [];
-    
+
     let videoElement = null;
     let canvasElement = null;
     let canvasContext = null;
     let isScanning = false;
+    let mediaStream = null;
+    let scanLoopRunning = false;
+
+    function setStatus(text) {
+        document.getElementById("status").innerText = text;
+    }
+
+    async function startCamera() {
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            videoElement.srcObject = mediaStream;
+            setStatus("Bereit. Richte die Kamera auf den QR-Stream.");
+            isScanning = true;
+            await new Promise(resolve => {
+                if (videoElement.readyState >= 1) resolve();
+                else videoElement.onloadedmetadata = () => resolve();
+            });
+            await videoElement.play().catch(() => {});
+            scanLoop();
+        } catch (err) {
+            setStatus("Kamerafehler: " + err.message);
+        }
+    }
+
+    // Kamera nach erfolgreichem Empfang wirklich ausschalten (vorher lief sie im Hintergrund weiter)
+    function stopCamera() {
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(t => t.stop());
+            mediaStream = null;
+        }
+        videoElement.srcObject = null;
+    }
 
     async function initScanner() {
         videoElement = document.getElementById("videoElement");
         canvasElement = document.createElement("canvas");
         canvasContext = canvasElement.getContext("2d", { willReadFrequently: true });
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            videoElement.srcObject = stream;
-            
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            isScanning = true;
-            
-            videoElement.onloadedmetadata = () => {
-                videoElement.play(); 
-                scanLoop(); 
-            };
-        } catch (err) {
-            document.getElementById("status").innerText = "Kamerafehler: " + err.message;
-        }
-
         if (!navigator.share) {
             document.getElementById('shareBtn').style.display = 'none';
         }
+        if (typeof zbarWasm === "undefined" || typeof LZString === "undefined" || typeof DOMPurify === "undefined") {
+            setStatus("❌ Bibliotheken konnten nicht geladen werden (offline oder blockiert).");
+            return;
+        }
+        await startCamera();
     }
 
     async function scanLoop() {
-        while (isScanning) {
-            await new Promise(resolve => setTimeout(resolve, 30));
+        if (scanLoopRunning) return; // nie zwei Schleifen parallel
+        scanLoopRunning = true;
+        try {
+            while (isScanning) {
+                await new Promise(resolve => setTimeout(resolve, 30));
 
-            if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-                canvasElement.width = videoElement.videoWidth;
-                canvasElement.height = videoElement.videoHeight;
-                
-                canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
-                
-                try {
-                    let symbols = await zbarWasm.scanImageData(imageData);
-                    
-                    if (symbols && symbols.length > 0) {
-                        let decodedText = symbols[0].decode();
-                        onScanSuccess(decodedText);
+                if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+                    // Canvas nur bei Grössenänderung neu dimensionieren (spart Zeit pro Frame)
+                    if (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight) {
+                        canvasElement.width = videoElement.videoWidth;
+                        canvasElement.height = videoElement.videoHeight;
                     }
-                } catch (error) {
-                    console.error("ZBar Fehler: ", error);
+                    canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+
+                    try {
+                        const symbols = await zbarWasm.scanImageData(imageData);
+                        if (symbols && symbols.length > 0) {
+                            // Alle erkannten Codes im Bild verarbeiten, nicht nur den ersten
+                            for (const sym of symbols) {
+                                if (!isScanning) break;
+                                onScanSuccess(sym.decode("utf-8"));
+                            }
+                        }
+                    } catch (error) {
+                        console.error("ZBar Fehler: ", error);
+                    }
                 }
             }
+        } finally {
+            scanLoopRunning = false;
         }
     }
 
@@ -211,7 +263,7 @@
         const now = performance.now();
         scanTimestamps.push(now);
         scanTimestamps = scanTimestamps.filter(t => now - t <= 2000);
-        
+
         let currentFps = 0;
         if (scanTimestamps.length > 1) {
             const timeDiffSeconds = (now - scanTimestamps[0]) / 1000;
@@ -223,42 +275,56 @@
     function buildLiveMatrix(totalFrames) {
         const container = document.getElementById("matrixContainer");
         container.innerHTML = "";
+        const fragment = document.createDocumentFragment();
         for (let i = 1; i <= totalFrames; i++) {
             const box = document.createElement("div");
             box.id = `matrix-box-${i}`;
             box.className = "matrix-box";
             box.innerText = i;
-            container.appendChild(box);
+            fragment.appendChild(box);
         }
+        container.appendChild(fragment);
     }
 
     function onScanSuccess(decodedText) {
-        const protocolMatch = decodedText.match(/^(\d+)\/(\d+)\|([A-Z]{2})\|([\s\S]*)$/);
-        if (!protocolMatch) return; 
+        if (typeof decodedText !== "string") return;
+        const protocolMatch = decodedText.match(FRAME_REGEX);
+        if (!protocolMatch) return;
+
+        const currentFrame = parseInt(protocolMatch[1], 10);
+        const totalFrames = parseInt(protocolMatch[2], 10);
+        const frameMode = protocolMatch[3];
+        const streamId = protocolMatch[4] || null;
+        const payload = protocolMatch[5];
+
+        // Eingaben streng prüfen (vorher konnten z.B. Frame 0 oder Frame 99 von 5 den Zähler verfälschen)
+        if (!ALLOWED_MODES.includes(frameMode)) return;
+        if (totalFrames < 1 || totalFrames > MAX_FRAMES) return;
+        if (currentFrame < 1 || currentFrame > totalFrames) return;
 
         calculateLiveFPS();
 
-        const currentFrame = parseInt(protocolMatch[1]);
-        const totalFrames = parseInt(protocolMatch[2]);
-        const frameMode = protocolMatch[3];
-        const payload = protocolMatch[4];
-
-        if (totalChunksCount !== totalFrames) {
+        // Ein neuer Stream wird an der Stream-ID erkannt (alt: nur an der Frame-Anzahl,
+        // wodurch zwei Streams mit gleicher Länge vermischt werden konnten)
+        const streamKey = (streamId || "legacy") + "|" + totalFrames + "|" + frameMode;
+        if (streamKey !== currentStreamKey) {
+            currentStreamKey = streamKey;
             totalChunksCount = totalFrames;
-            receivedChunks = {};
-            streamMode = frameMode; 
+            receivedChunks = new Map();
+            streamMode = frameMode;
+            isLegacyStream = !streamId;
             scanTimestamps = [];
             buildLiveMatrix(totalFrames);
         }
 
-        if (!receivedChunks[currentFrame]) {
-            receivedChunks[currentFrame] = payload;
-            
+        if (!receivedChunks.has(currentFrame)) {
+            receivedChunks.set(currentFrame, payload);
+
             const box = document.getElementById(`matrix-box-${currentFrame}`);
             if (box) box.classList.add("loaded");
-            
-            const receivedCount = Object.keys(receivedChunks).length;
-            document.getElementById("status").innerText = `Empfange: ${receivedCount} von ${totalFrames} Teilen`;
+
+            const receivedCount = receivedChunks.size;
+            setStatus(`Empfange: ${receivedCount} von ${totalFrames} Teilen`);
 
             if (receivedCount === totalFrames) {
                 assembleAndCheckEncryption();
@@ -266,8 +332,32 @@
         }
     }
 
+    function revealCard() {
+        const card = document.getElementById("resultCard");
+        card.style.display = "block";
+        setTimeout(() => { card.classList.add("reveal"); }, 50);
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+
+    function showError(header, message) {
+        document.getElementById("cardTypeHeader").innerText = header;
+        const content = document.getElementById("result-content");
+        content.innerHTML = "";
+        const p = document.createElement("p");
+        p.className = "error-text";
+        p.innerText = message;
+        content.appendChild(p);
+        document.getElementById("copyBtn").style.display = "none";
+        document.getElementById("shareBtn").style.display = "none";
+        document.getElementById("pdfBtn").style.display = "none";
+        document.getElementById("cardButtons").style.display = "flex";
+        revealCard();
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    }
+
     function assembleAndCheckEncryption() {
-        isScanning = false; 
+        isScanning = false;
+        stopCamera();
         document.getElementById("scanLaser").style.display = "none";
         document.getElementById("scannerContainer").classList.add("minimized");
         document.getElementById("status").style.display = "none";
@@ -276,54 +366,102 @@
 
         let fullAssembledString = "";
         for (let i = 1; i <= totalChunksCount; i++) {
-            fullAssembledString += receivedChunks[i];
+            fullAssembledString += receivedChunks.get(i);
         }
+        receivedChunks = new Map();
 
         if (streamMode === 'EX' || streamMode === 'EM') {
+            if (isLegacyStream) {
+                showError("⚠️ ALTES FORMAT",
+                    "Dieser Stream wurde mit einer alten Version des QR-Streamers (CryptoJS-Verschlüsselung) erzeugt. " +
+                    "Aus Sicherheitsgründen wird dieses Format nicht mehr unterstützt. Bitte aktualisiere QR-Streamer.html und sende erneut.");
+                return;
+            }
             encryptedPayloadBase64 = fullAssembledString;
             document.getElementById("cardTypeHeader").innerText = "🔒 VERSCHLÜSSELTER EMPFANG";
-            document.getElementById("cardButtons").style.display = "none"; 
-            
+            document.getElementById("cardButtons").style.display = "none";
+
             document.getElementById("result-content").innerHTML = `
                 <div class="crypto-ui">
                     <h2>Geschützte Daten</h2>
-                    <p>Dieser Stream ist mit einem PIN verschlüsselt. Bitte gib den Schlüssel ein, um den Text zu lesen.</p>
-                    <input type="password" id="receiverPin" placeholder="PIN eingeben">
-                    <button onclick="attemptDecryption()">Entschlüsseln 🔓</button>
-                    <p class="crypto-error" id="decryptError">Falscher PIN! Zugriff verweigert.</p>
+                    <p>Dieser Stream ist verschlüsselt (AES-256-GCM). Bitte gib den PIN bzw. die Passphrase ein.</p>
+                    <input type="password" id="receiverPin" placeholder="PIN eingeben" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <button id="decryptBtn">Entschlüsseln 🔓</button>
+                    <p class="crypto-error" id="decryptError">Falscher PIN oder beschädigte Daten.</p>
                 </div>
             `;
-            
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            document.getElementById("decryptBtn").addEventListener("click", attemptDecryption);
+            document.getElementById("receiverPin").addEventListener("keydown", (e) => { if (e.key === "Enter") attemptDecryption(); });
+            revealCard();
         } else {
             processDecryptedData(fullAssembledString);
         }
     }
 
-    function attemptDecryption() {
-        const pin = document.getElementById("receiverPin").value;
+    function base64ToBytes(b64) {
+        const bin = atob(b64.replace(/\s+/g, ""));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+    }
+
+    // AES-256-GCM + PBKDF2-SHA256 über die Web Crypto API.
+    // GCM prüft die Integrität: ein falscher PIN oder manipulierte Daten führen garantiert zu einem Fehler
+    // (vorher konnte CryptoJS bei falschem PIN zufälligen "Datensalat" liefern).
+    async function decryptPayload(b64, passphrase) {
+        if (!window.crypto || !crypto.subtle) {
+            throw new Error("Web Crypto API nicht verfügbar (Seite muss über https:// oder lokal geöffnet werden).");
+        }
+        const data = base64ToBytes(b64);
+        if (data.length < 16 + 12 + 16) throw new Error("Daten zu kurz");
+        const salt = data.slice(0, 16);
+        const iv = data.slice(16, 28);
+        const cipher = data.slice(28);
+        const enc = new TextEncoder();
+        const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+        const key = await crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+            baseKey, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
+        );
+        const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+        return new TextDecoder("utf-8", { fatal: true }).decode(plain);
+    }
+
+    let decryptInProgress = false;
+    async function attemptDecryption() {
+        if (decryptInProgress) return;
+        const pinField = document.getElementById("receiverPin");
+        const btn = document.getElementById("decryptBtn");
+        const errorEl = document.getElementById("decryptError");
+        const pin = pinField.value;
+        if (!pin) return;
+
+        decryptInProgress = true;
+        btn.disabled = true;
+        btn.innerText = "Entschlüssele…";
+        errorEl.style.display = "none";
         try {
-            const bytes = CryptoJS.AES.decrypt(encryptedPayloadBase64, pin);
-            const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-            if (!decryptedString) throw new Error("Falscher PIN");
-            
+            const decryptedString = await decryptPayload(encryptedPayloadBase64, pin);
+            encryptedPayloadBase64 = "";
             document.getElementById("cardButtons").style.display = "flex";
             processDecryptedData(decryptedString);
         } catch (e) {
-            document.getElementById("decryptError").style.display = "block";
+            pinField.value = "";
+            errorEl.style.display = "block";
+            btn.disabled = false;
+            btn.innerText = "Entschlüsseln 🔓";
             if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        } finally {
+            decryptInProgress = false;
         }
     }
 
     // Der intelligente und fehlertolerante CSV-Detektor
     function formatIfCsv(text) {
         const lines = text.trim().split('\n');
-        
-        if (lines.length < 3) return text; 
-        
+
+        if (lines.length < 3) return text;
+
         const separator = lines[0].includes(';') ? ';' : (lines[0].includes(',') ? ',' : null);
         if (!separator) return text;
 
@@ -336,7 +474,7 @@
 
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i].trim();
-            
+
             if (line === "") {
                 if (!isStillCsv) extraTextLines.push(line);
                 continue;
@@ -346,7 +484,7 @@
                 if (line.split(separator).length === expectedColumns) {
                     validCsvLines.push(line);
                 } else {
-                    isStillCsv = false; 
+                    isStillCsv = false;
                     extraTextLines.push(line);
                 }
             } else {
@@ -358,9 +496,10 @@
 
         let markdownTable = "";
         validCsvLines.forEach((line, index) => {
-            const columns = line.split(separator).map(cell => cell.trim());
+            // "|" in Zellen escapen, sonst zerfällt die Markdown-Tabelle
+            const columns = line.split(separator).map(cell => cell.trim().replace(/\|/g, "\\|"));
             markdownTable += "| " + columns.join(" | ") + " |\n";
-            
+
             if (index === 0) {
                 markdownTable += "|" + columns.map(() => "---").join("|") + "|\n";
             }
@@ -373,68 +512,87 @@
         return markdownTable;
     }
 
+    // Markdown -> HTML -> DOMPurify. Ohne diesen Schritt konnte ein präparierter QR-Code
+    // beliebiges JavaScript im Reader ausführen (z.B. <img src=x onerror=...>).
+    function renderSafeMarkdown(markdown) {
+        const html = marked.parse(markdown, { breaks: true, mangle: false, headerIds: false });
+        return DOMPurify.sanitize(html, {
+            USE_PROFILES: { html: true },
+            FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select'],
+            FORBID_ATTR: ['style']
+        });
+    }
+
     function processDecryptedData(payloadString) {
         let finalDecodedText = payloadString;
 
         // Dekompression falls nötig
-        if (streamMode === 'CX' || streamMode === 'CM' || streamMode === 'EX' || streamMode === 'EM') {
+        if (['CX', 'CM', 'EX', 'EM'].includes(streamMode)) {
+            let decompressed = null;
             try {
-                finalDecodedText = LZString.decompressFromEncodedURIComponent(payloadString);
+                decompressed = LZString.decompressFromEncodedURIComponent(payloadString);
             } catch (e) {
-                document.getElementById("status").style.display = "block";
-                document.getElementById("status").innerText = "❌ Fehler bei der Dekompression!";
+                decompressed = null;
+            }
+            // LZString wirft bei kaputten Daten meist KEINEN Fehler, sondern liefert null oder "" zurück
+            if (decompressed === null || (decompressed === "" && payloadString.length > 0)) {
+                showError("❌ FEHLER", "Die Daten konnten nicht dekomprimiert werden (beschädigt oder unvollständig). Bitte neu scannen.");
                 return;
             }
+            finalDecodedText = decompressed;
         }
-        
+
         rawAssembledText = finalDecodedText; // Unangetastet für den Kopieren-Button
-        
+
         const contentArea = document.getElementById("result-content");
         const headerArea = document.getElementById("cardTypeHeader");
         const pdfBtn = document.getElementById("pdfBtn");
-        
-        // NEU: Nur formatieren, wenn der SENDER auch Markdown (MD, CM, EM) gewählt hat!
+
+        // Nur formatieren, wenn der SENDER auch Markdown (MD, CM, EM) gewählt hat
         const isMarkdownMode = ['MD', 'CM', 'EM'].includes(streamMode);
-        
+
         if (isMarkdownMode) {
-            // Markdown-Modus: CSV ausführen, HTML rendern und KaTeX aktivieren
             let textForDisplay = formatIfCsv(finalDecodedText);
             let isCsv = (textForDisplay !== finalDecodedText);
-            
-            contentArea.innerHTML = marked.parse(textForDisplay, { breaks: true });
-            
-            if (isCsv) {
-                headerArea.innerText = "📊 Empfang: CSV Tabelle";
-            } else {
-                headerArea.innerText = "📝 Empfang: Markdown Dokument";
-            }
-            
-            pdfBtn.style.display = "flex"; // PDF-Export erlauben
-            contentArea.style.whiteSpace = "normal"; // Zeilenumbruch normal
-            
-            renderMathInElement(contentArea, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false}
-                ],
-                throwOnError: false
+
+            contentArea.innerHTML = renderSafeMarkdown(textForDisplay);
+            // Links sicher in neuem Tab öffnen
+            contentArea.querySelectorAll("a[href]").forEach(a => {
+                a.setAttribute("target", "_blank");
+                a.setAttribute("rel", "noopener noreferrer");
             });
-            
+
+            headerArea.innerText = isCsv ? "📊 Empfang: CSV Tabelle" : "📝 Empfang: Markdown Dokument";
+
+            pdfBtn.style.display = "flex";
+            contentArea.style.whiteSpace = "normal";
+
+            if (typeof renderMathInElement === "function") {
+                renderMathInElement(contentArea, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false,
+                    trust: false
+                });
+            }
+
         } else {
             // Text-Modus (TX, CX, EX): Strikt roher Text, keine Formatierung, kein PDF
-            contentArea.innerText = finalDecodedText; // Nutzt innerText für XSS-Sicherheit und Raw-Feeling
+            contentArea.textContent = finalDecodedText;
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
-            
-            pdfBtn.style.display = "none"; // PDF-Export ausblenden
-            contentArea.style.whiteSpace = "pre-wrap"; // Wichtig, damit Zeilenumbrüche im Code/CSV schön bleiben
+
+            pdfBtn.style.display = "none";
+            contentArea.style.whiteSpace = "pre-wrap";
         }
 
-        // Anzeige einblenden
-        if (['TX', 'MD', 'CX', 'CM'].includes(streamMode)) {
-            const card = document.getElementById("resultCard");
-            card.style.display = "block";
-            setTimeout(() => { card.classList.add("reveal"); }, 50);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        document.getElementById("copyBtn").style.display = "flex";
+        if (navigator.share) document.getElementById("shareBtn").style.display = "flex";
+
+        // Bei verschlüsselten Streams ist die Karte schon sichtbar
+        if (!['EX', 'EM'].includes(streamMode)) {
+            revealCard();
         }
     }
 
@@ -445,33 +603,34 @@
     function resetScanner() {
         const card = document.getElementById("resultCard");
         card.classList.remove("reveal");
-        
+
         setTimeout(() => {
             card.style.display = "none";
+            document.getElementById("result-content").innerHTML = "";
             document.getElementById("scannerContainer").classList.remove("minimized");
             document.getElementById("matrixContainer").style.display = "grid";
-            document.getElementById("matrixContainer").innerHTML = ""; 
-            document.getElementById("fpsCounter").style.display = "block"; 
+            document.getElementById("matrixContainer").innerHTML = "";
+            document.getElementById("fpsCounter").style.display = "block";
             document.getElementById("fpsCounter").innerText = "Scan-Rate: 0.0 FPS";
             document.getElementById("status").style.display = "block";
             document.getElementById("scanLaser").style.display = "block";
             document.getElementById("cardButtons").style.display = "flex";
-            document.getElementById("pdfBtn").style.display = "none"; 
-            
-            receivedChunks = {};
+            document.getElementById("pdfBtn").style.display = "none";
+
+            receivedChunks = new Map();
             totalChunksCount = 0;
+            currentStreamKey = null;
             rawAssembledText = "";
             encryptedPayloadBase64 = "";
             scanTimestamps = [];
-            
-            document.getElementById("status").innerText = "Bereit. Richte die Kamera auf den QR-Stream.";
-            
+
+            setStatus("Starte Kamera...");
+
             const copyBtn = document.getElementById("copyBtn");
             copyBtn.innerText = "Kopieren 📋";
             copyBtn.style.backgroundColor = "#0071e3";
-            
-            isScanning = true;
-            scanLoop();
+
+            startCamera();
         }, 400);
     }
 
@@ -486,14 +645,18 @@
                 copyBtn.innerText = "Kopieren 📋";
                 copyBtn.style.backgroundColor = "#0071e3";
             }, 2000);
+        }).catch(() => {
+            alert("Kopieren nicht möglich – bitte Text manuell markieren.");
         });
     }
 
     function shareText() {
         if (!rawAssembledText || !navigator.share) return;
-        navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch((e) => {});
+        navigator.share({ title: 'Sicherer Datenempfang (QR)', text: rawAssembledText }).catch(() => {});
     }
 
+    // Kamera freigeben, wenn die Seite verlassen wird
+    window.addEventListener('pagehide', stopCamera);
     window.addEventListener('DOMContentLoaded', initScanner);
 </script>
 
