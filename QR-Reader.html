@@ -17,7 +17,6 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-GvrOXuhMATgEsSwCs4smul74iXGOixntILdUW9XmUC6+HX0sLNAK3q71HotJqlAn" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" integrity="sha384-cpW21h6RZv/phavutF+AuVYrr+dA8xD9zs6FwLpaCct6O9ctzYFfFr4dgmgccOTx" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
     <!-- Entschlüsselung (Web Crypto) und Dekompression (DecompressionStream) sind im Browser eingebaut -->
 
     <style>
@@ -86,6 +85,17 @@
         #result-content th { background-color: #f2f2f7; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #d2d2d7; }
         #result-content td { padding: 10px 12px; border-bottom: 1px solid #e5e5ea; }
         #result-content tr:last-child td { border-bottom: none; }
+        .result-card, #result-content { min-width: 0; max-width: 100%; }
+        #result-content { overflow-wrap: anywhere; position: relative; }
+        #result-content .katex { position: relative; }
+        #result-content .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 15px 0; }
+        #result-content .table-scroll table { margin: 2px; width: auto; min-width: calc(100% - 4px); }
+        #result-content th, #result-content td { white-space: nowrap; }
+        #result-content .katex-display { position: relative; overflow-x: auto; overflow-y: hidden; padding: 4px 0; margin: 12px 0; }
+        #result-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 4px solid #d2d2d7; background: #f5f5f7; border-radius: 0 8px 8px 0; color: #3a3a3c; }
+        #result-content blockquote p:last-child { margin-bottom: 0; }
+        #result-content pre { background: #f2f2f7; padding: 12px; border-radius: 8px; overflow-x: auto; }
+        #result-content pre code { padding: 0; background: none; font-size: 12px; line-height: 1.4; }
         
         .button-group { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
         button { flex: 1 1 calc(33.33% - 6px); min-width: 85px; padding: 12px 6px; color: white; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 4px; }
@@ -113,9 +123,15 @@
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
             .container { max-width: 100% !important; width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
-            h1, .scanner-wrapper, #status, .matrix-container, #fpsCounter, .card-header, .button-group { display: none !important; }
+            .container > h1, .scanner-wrapper, #status, .matrix-container, #fpsCounter, .card-header, .button-group { display: none !important; }
             .result-card { display: block !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; transform: none !important; opacity: 1 !important; background: white !important; }
             #result-content { max-height: none !important; overflow-y: visible !important; padding: 0 !important; }
+            #result-content .table-scroll, #result-content .katex-display, #result-content pre { overflow: visible !important; }
+            #result-content th, #result-content td { white-space: normal !important; padding: 6px 8px !important; }
+            #result-content table { width: 100% !important; font-size: 11px !important; page-break-inside: auto; }
+            #result-content tr, #result-content .katex-display, #result-content pre, #result-content blockquote { page-break-inside: avoid; break-inside: avoid; }
+            #result-content pre { white-space: pre-wrap !important; }
+            #result-content h1, #result-content h2, #result-content h3 { page-break-after: avoid; break-after: avoid; }
         }
     </style>
 </head>
@@ -745,13 +761,84 @@
     }
 
     // Markdown -> HTML -> DOMPurify (verhindert Script-Injection über präparierte QR-Codes)
-    function renderSafeMarkdown(markdown) {
-        const html = marked.parse(markdown, { breaks: true, mangle: false, headerIds: false });
-        return DOMPurify.sanitize(html, {
+    // ---------- Formeln schützen ----------
+    // Problem vorher: marked verarbeitete den Text zuerst. Mit "breaks: true" wurde jeder Zeilenumbruch
+    // innerhalb von $$ … $$ zu <br>, ausserdem wurden "\\" und "_…_" verändert. KaTeX fand die Formeln
+    // danach nicht mehr. Lösung: Formeln VOR marked herauslösen (Code-Blöcke ausgenommen), durch
+    // Platzhalter ersetzen und nach dem Bereinigen direkt mit KaTeX einsetzen.
+    const MATH_TOKEN = /KXMATH([DI])(\d+)X/g;
+
+    function extractMath(markdown) {
+        const formulas = [];
+        const add = (tex, display) => { formulas.push({ tex, display }); return `KXMATH${display ? "D" : "I"}${formulas.length - 1}X`; };
+        // Code-Blöcke (```…```, ~~~…~~~) und Inline-Code (`…`) bleiben unangetastet
+        const parts = markdown.split(/(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]+`)/);
+        for (let k = 0; k < parts.length; k += 2) {
+            parts[k] = parts[k]
+                // Block-Formeln $$ … $$ (auch mehrzeilig, in Listen und Zitaten)
+                .replace(/\$\$([\s\S]+?)\$\$/g, (m, tex, offset, whole) => {
+                    const lineStart = whole.lastIndexOf("\n", offset - 1) + 1;
+                    const inQuote = /^\s*>/.test(whole.slice(lineStart, offset));
+                    if (inQuote) tex = tex.replace(/\n[ \t]*>[ \t]?/g, "\n"); // "> " am Zeilenanfang entfernen
+                    return add(tex.trim(), true);
+                })
+                // Inline-Formeln $…$ (kein Leerzeichen innen am Rand, keine Zahl direkt danach -> "5 $" bleibt Text)
+                .replace(/(^|[^\\$])\$(?!\s)([^$\n]+?)(?<![\s\\])\$(?!\d)/g, (m, before, tex) => before + add(tex, false));
+        }
+        return { text: parts.join(""), formulas };
+    }
+
+    function insertMath(container, formulas) {
+        if (!formulas.length) return;
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) if (walker.currentNode.nodeValue.includes("KXMATH")) nodes.push(walker.currentNode);
+        for (const node of nodes) {
+            const frag = document.createDocumentFragment();
+            let last = 0;
+            const value = node.nodeValue;
+            for (const m of value.matchAll(MATH_TOKEN)) {
+                const f = formulas[+m[2]];
+                if (!f) continue;
+                frag.appendChild(document.createTextNode(value.slice(last, m.index)));
+                const el = document.createElement(f.display ? "div" : "span");
+                try {
+                    katex.render(f.tex, el, { displayMode: f.display, throwOnError: false, trust: false, strict: "ignore", output: "htmlAndMathml" });
+                } catch (e) {
+                    el.textContent = f.display ? `$$${f.tex}$$` : `$${f.tex}$`;
+                }
+                frag.appendChild(el);
+                last = m.index + m[0].length;
+            }
+            frag.appendChild(document.createTextNode(value.slice(last)));
+            // Steht eine Block-Formel allein in einem Absatz, den leeren <p> durch die Formel ersetzen
+            const parent = node.parentNode;
+            parent.replaceChild(frag, node);
+            if (parent.tagName === "P" && parent.childNodes.length && [...parent.childNodes].every(n =>
+                    (n.nodeType === 3 && !n.nodeValue.trim()) || n.nodeName === "BR" || (n.nodeName === "DIV" && n.querySelector(".katex-display")))) {
+                parent.replaceWith(...[...parent.childNodes].filter(n => n.nodeName === "DIV"));
+            }
+        }
+    }
+
+    // Markdown -> HTML -> DOMPurify (verhindert Script-Injection über präparierte QR-Codes).
+    // Formeln werden erst danach mit KaTeX eingesetzt (KaTeX erzeugt selbst sicheres HTML, trust: false).
+    function renderSafeMarkdown(markdown, container) {
+        const { text, formulas } = extractMath(markdown);
+        const html = marked.parse(text, { breaks: true, mangle: false, headerIds: false });
+        container.innerHTML = DOMPurify.sanitize(html, {
             USE_PROFILES: { html: true },
             FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select'],
             FORBID_ATTR: ['style']
         });
+        // Breite Tabellen auf dem Handy horizontal scrollbar machen statt sie zu quetschen
+        container.querySelectorAll("table").forEach(t => {
+            const wrap = document.createElement("div");
+            wrap.className = "table-scroll";
+            t.replaceWith(wrap);
+            wrap.appendChild(t);
+        });
+        if (typeof katex !== "undefined") insertMath(container, formulas);
     }
 
     function displayText(finalDecodedText) {
@@ -766,7 +853,7 @@
             const textForDisplay = formatIfCsv(finalDecodedText);
             const isCsv = (textForDisplay !== finalDecodedText);
 
-            contentArea.innerHTML = renderSafeMarkdown(textForDisplay);
+            renderSafeMarkdown(textForDisplay, contentArea);
             contentArea.querySelectorAll("a[href]").forEach(a => {
                 a.setAttribute("target", "_blank");
                 a.setAttribute("rel", "noopener noreferrer");
@@ -778,16 +865,6 @@
             if (isCsv) show("csvBtn");      // erkannte Tabelle zusätzlich als .csv
             contentArea.style.whiteSpace = "normal";
 
-            if (typeof renderMathInElement === "function") {
-                renderMathInElement(contentArea, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false}
-                    ],
-                    throwOnError: false,
-                    trust: false
-                });
-            }
         } else {
             contentArea.textContent = finalDecodedText;
             headerArea.innerText = "📄 Empfang: Reiner Text (Plaintext)";
