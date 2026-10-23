@@ -140,7 +140,7 @@
         <div class="controls-wrapper">
             <div>
                 <label for="chunkSize">Paketgrösse:</label>
-                <select id="chunkSize" onchange="updateRateInfo()">
+                <select id="chunkSize" onchange="updateRateInfo(); updateStats()">
                     <option value="200">Sehr sicher (200 B)</option>
                     <option value="400" selected>Normal (400 B)</option>
                     <option value="700">Gross (700 B)</option>
